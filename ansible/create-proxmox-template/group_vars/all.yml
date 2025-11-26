@@ -1,0 +1,14 @@
+---
+# Template settings (node-specific VM IDs)
+template_id_pve01: 9000
+template_id_pve02: 9001
+template_id_pve03: 9002
+template_name: ubuntu-2404-cloudinit-template
+
+# Cloud image settings
+cloud_image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+cloud_image_file: noble-server-cloudimg-amd64.img
+
+# Proxmox settings
+iso_dir: /var/lib/vz/template/iso
+storage: local-lvm

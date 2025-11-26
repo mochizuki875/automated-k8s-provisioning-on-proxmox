@@ -1,0 +1,316 @@
+---
+- name: Install and configure Kubernetes prerequisites
+  hosts: k8s_nodes
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    # ==========================================
+    # System update
+    # ==========================================
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+      tags:
+        - update
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+      tags:
+        - update
+
+    # ==========================================
+    # containerd installation
+    # ==========================================
+    - name: Download containerd
+      get_url:
+        url: "https://github.com/containerd/containerd/releases/download/v{{ containerd_version }}/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+        dest: "/tmp/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+        mode: '0644'
+      tags:
+        - containerd
+
+    - name: Extract containerd to /usr/local
+      unarchive:
+        src: "/tmp/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+        dest: "{{ containerd_install_path }}"
+        remote_src: yes
+      tags:
+        - containerd
+
+    - name: Create systemd service directory
+      file:
+        path: /usr/local/lib/systemd/system
+        state: directory
+        mode: '0755'
+      tags:
+        - containerd
+
+    - name: Create containerd systemd service file
+      copy:
+        dest: /usr/local/lib/systemd/system/containerd.service
+        content: |
+          # Copyright The containerd Authors.
+          #
+          # Licensed under the Apache License, Version 2.0 (the "License");
+          # you may not use this file except in compliance with the License.
+          # You may obtain a copy of the License at
+          #
+          #     http://www.apache.org/licenses/LICENSE-2.0
+          #
+          # Unless required by applicable law or agreed to in writing, software
+          # distributed under the License is distributed on an "AS IS" BASIS,
+          # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+          # See the License for the specific language governing permissions and
+          # limitations under the License.
+
+          [Unit]
+          Description=containerd container runtime
+          Documentation=https://containerd.io
+          After=network.target dbus.service
+
+          [Service]
+          ExecStartPre=-/sbin/modprobe overlay
+          ExecStart=/usr/local/bin/containerd
+
+          Type=notify
+          Delegate=yes
+          KillMode=process
+          Restart=always
+          RestartSec=5
+
+          # Having non-zero Limit*s causes performance problems due to accounting overhead
+          # in the kernel. We recommend using cgroups to do container-local accounting.
+          LimitNPROC=infinity
+          LimitCORE=infinity
+
+          # Comment TasksMax if your systemd version does not supports it.
+          # Only systemd 226 and above support this version.
+          TasksMax=infinity
+          OOMScoreAdjust=-999
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+      tags:
+        - containerd
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+      tags:
+        - containerd
+
+    - name: Enable and start containerd service
+      systemd:
+        name: containerd
+        enabled: yes
+        state: started
+      tags:
+        - containerd
+
+    # ==========================================
+    # runc installation
+    # ==========================================
+    - name: Download runc
+      get_url:
+        url: "https://github.com/opencontainers/runc/releases/download/v{{ runc_version }}/runc.amd64"
+        dest: "/tmp/runc.amd64"
+        mode: '0755'
+      tags:
+        - runc
+
+    - name: Install runc
+      copy:
+        src: "/tmp/runc.amd64"
+        dest: "{{ runc_install_path }}"
+        mode: '0755'
+        remote_src: yes
+      tags:
+        - runc
+
+    - name: Create containerd config directory
+      file:
+        path: "{{ containerd_config_path }}"
+        state: directory
+        mode: '0755'
+      tags:
+        - runc
+        - containerd-config
+
+    - name: Generate default containerd config
+      shell: containerd config default > {{ containerd_config_path }}/config.toml
+      args:
+        creates: "{{ containerd_config_path }}/config.toml"
+      tags:
+        - runc
+        - containerd-config
+
+    - name: Enable SystemdCgroup in containerd config
+      lineinfile:
+        path: "{{ containerd_config_path }}/config.toml"
+        regexp: '^\s*SystemdCgroup\s*='
+        line: '            SystemdCgroup = true'
+        state: present
+      notify:
+        - Restart containerd
+      tags:
+        - runc
+        - containerd-config
+
+    # ==========================================
+    # CNI plugins installation
+    # ==========================================
+    - name: Download CNI plugins
+      get_url:
+        url: "https://github.com/containernetworking/plugins/releases/download/v{{ cni_version }}/cni-plugins-linux-amd64-v{{ cni_version }}.tgz"
+        dest: "/tmp/cni-plugins-linux-amd64-v{{ cni_version }}.tgz"
+        mode: '0644'
+      tags:
+        - cni
+
+    - name: Create CNI bin directory
+      file:
+        path: "{{ cni_install_path }}"
+        state: directory
+        mode: '0755'
+      tags:
+        - cni
+
+    - name: Extract CNI plugins
+      unarchive:
+        src: "/tmp/cni-plugins-linux-amd64-v{{ cni_version }}.tgz"
+        dest: "{{ cni_install_path }}"
+        remote_src: yes
+      tags:
+        - cni
+
+    # ==========================================
+    # Configure /etc/hosts
+    # ==========================================
+    - name: Add Kubernetes cluster nodes to /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        line: "{{ hostvars[item]['ansible_host'] }}   {{ item }}"
+        state: present
+      loop: "{{ groups['k8s_nodes'] }}"
+      tags:
+        - hosts
+
+    # ==========================================
+    # Install Kubernetes components
+    # ==========================================
+    - name: Install required packages for Kubernetes repository
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gpg
+        state: present
+        update_cache: yes
+      tags:
+        - kubernetes
+
+    - name: Create keyrings directory
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      tags:
+        - kubernetes
+
+    - name: Add Kubernetes GPG key
+      shell: |
+        curl -fsSL https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/Release.key | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+      tags:
+        - kubernetes
+
+    - name: Add Kubernetes repository
+      apt_repository:
+        repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v{{ kubernetes_version }}/deb/ /"
+        filename: kubernetes
+        state: present
+      tags:
+        - kubernetes
+
+    - name: Update apt cache after adding Kubernetes repository
+      apt:
+        update_cache: yes
+      tags:
+        - kubernetes
+
+    - name: Install Kubernetes components
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+      tags:
+        - kubernetes
+
+    - name: Hold Kubernetes packages
+      dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop:
+        - kubelet
+        - kubeadm
+        - kubectl
+      tags:
+        - kubernetes
+
+    - name: Enable and start kubelet service
+      systemd:
+        name: kubelet
+        enabled: yes
+        state: started
+      tags:
+        - kubernetes
+
+- name: Configure control plane nodes
+  hosts: k8s_control_plane
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    # ==========================================
+    # Deploy kubeadm configuration
+    # ==========================================
+    - name: Create kubeadm configuration file
+      copy:
+        dest: "{{ kubeadm_config_file }}"
+        content: "{{ kubeadm_config_content }}"
+        mode: '0644'
+      tags:
+        - kubeadm-config
+
+- name: Cleanup installation files
+  hosts: k8s_nodes
+  become: yes
+  gather_facts: no
+
+  tasks:
+    # ==========================================
+    # Cleanup
+    # ==========================================
+    - name: Clean up downloaded files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/containerd-{{ containerd_version }}-linux-amd64.tar.gz"
+        - "/tmp/runc.amd64"
+        - "/tmp/cni-plugins-linux-amd64-v{{ cni_version }}.tgz"
+      tags:
+        - cleanup
+
+  handlers:
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted

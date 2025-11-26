@@ -1,0 +1,35 @@
+---
+- name: Delete Ubuntu Cloud-init Template from all Proxmox nodes
+  hosts: proxmox_nodes
+  gather_facts: no
+  
+  tasks:
+    - name: Set template ID based on node
+      set_fact:
+        template_id: "{{ lookup('vars', 'template_id_' + inventory_hostname) }}"
+
+    - name: Check if template exists
+      shell: qm list | grep -w "{{ template_id }}"
+      register: template_exists
+      failed_when: false
+      changed_when: false
+
+    - name: Delete template
+      command: qm destroy {{ template_id }}
+      when: template_exists.rc == 0
+
+    - name: Verify deletion
+      shell: qm list | grep -w "{{ template_id }}"
+      register: verify_deletion
+      failed_when: false
+      changed_when: false
+
+    - name: Display deletion status
+      debug:
+        msg: "Template {{ template_id }} deleted from {{ inventory_hostname }}"
+      when: template_exists.rc == 0 and verify_deletion.rc != 0
+
+    - name: Display skip message
+      debug:
+        msg: "Template {{ template_id }} does not exist on {{ inventory_hostname }}, skipping"
+      when: template_exists.rc != 0

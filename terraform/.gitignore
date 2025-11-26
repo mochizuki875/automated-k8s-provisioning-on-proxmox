@@ -1,0 +1,40 @@
+# Terraformステートファイル
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Crash log files
+crash.log
+crash.*.log
+
+# 変数ファイル(機密情報を含む可能性があるため)
+terraform.tfvars
+*.auto.tfvars
+
+# 環境変数ファイル
+.env
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# Terraformディレクトリ
+.terraform/
+.terraform.lock.hcl
+
+# IDE設定
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS固有ファイル
+.DS_Store
+Thumbs.db
