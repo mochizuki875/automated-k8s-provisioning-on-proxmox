@@ -16,6 +16,11 @@ kubeadm_config_file: "/root/kubeadm-config.yaml"
 # Kubeadm configuration content
 kubeadm_config_content: |
   apiVersion: kubeadm.k8s.io/v1beta4
+  kind: InitConfiguration
+  skipPhases:
+  - addon/kube-proxy
+  ---
+  apiVersion: kubeadm.k8s.io/v1beta4
   kind: ClusterConfiguration
   kubernetesVersion: v1.34.2
   clusterName: kubernetes
@@ -46,7 +51,7 @@ kubeadm_config_content: |
     - name: "bind-address"
       value: "0.0.0.0"
       
-  ---
-  apiVersion: kubeproxy.config.k8s.io/v1alpha1
-  kind: KubeProxyConfiguration
-  metricsBindAddress: 0.0.0.0:10249
+  # ---
+  # apiVersion: kubeproxy.config.k8s.io/v1alpha1
+  # kind: KubeProxyConfiguration
+  # metricsBindAddress: 0.0.0.0:10249
