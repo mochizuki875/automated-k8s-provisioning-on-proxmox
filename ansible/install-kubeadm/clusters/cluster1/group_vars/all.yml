@@ -32,6 +32,12 @@ kubeadm_config_content: |
     extraArgs:
     - name: "authorization-mode"
       value: "Node,RBAC"
+    # For Kubeflow installation
+    # https://github.com/kubeflow/manifests/tree/v1.10.2
+    - name: "service-account-issuer"
+      value: "https://kubernetes.default.svc"
+    - name: "service-account-signing-key-file"
+      value: "/etc/kubernetes/pki/sa.key"
   controllerManager:
     extraArgs:
     - name: "bind-address"

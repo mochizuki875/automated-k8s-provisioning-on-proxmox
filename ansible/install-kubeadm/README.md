@@ -61,5 +61,7 @@ ansible-playbook -i clusters/cluster1/inventory.ini install-k8s-runtime.yml
 
 ## Kubernetesクラスタ構築
 ```bash
-kubeadm init --config kubeadm-config.yaml 
+kubeadm init --config kubeadm-config.yaml
+mkdir ~/.kube
+cp /etc/kubernetes/admin.conf ~/.kube/config
 ```

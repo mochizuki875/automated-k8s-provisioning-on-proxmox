@@ -272,6 +272,12 @@
       tags:
         - kubernetes
 
+  handlers:
+    - name: Restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+
 - name: Configure control plane nodes
   hosts: k8s_control_plane
   become: yes
@@ -308,9 +314,3 @@
         - "/tmp/cni-plugins-linux-amd64-v{{ cni_version }}.tgz"
       tags:
         - cleanup
-
-  handlers:
-    - name: Restart containerd
-      systemd:
-        name: containerd
-        state: restarted
