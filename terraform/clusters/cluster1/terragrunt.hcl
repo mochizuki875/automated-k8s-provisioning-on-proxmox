@@ -29,18 +29,21 @@ inputs = {
   
   # ControlPlaneノードのデフォルトスペック
   cp_spec = {
-    cores     = 4
-    sockets   = 1
-    memory    = 8192
-    disk_size = "50G"
+    cores      = 4
+    sockets    = 1
+    memory     = 16384
+    disk1_size = "100G"
+    disk2_size = "100G"
   }
   
   # Nodeのデフォルトスペック
   node_spec = {
-    cores     = 8
-    sockets   = 1
+    cores      = 8
+    sockets    = 1
+    # memory     = 32768
     memory    = 16384
-    disk_size = "50G"
+    disk1_size = "100G"
+    disk2_size = "100G"
   }
   
   # VM定義
@@ -66,6 +69,13 @@ inputs = {
       target_node = "pve01"
       vm_id       = 103
       ip_address  = "192.168.2.122"
+      role        = "Node"
+    },
+    {
+      name        = "k8s-cluster1-node03"
+      target_node = "pve01"
+      vm_id       = 104
+      ip_address  = "192.168.2.123"
       role        = "Node"
     }
   ]

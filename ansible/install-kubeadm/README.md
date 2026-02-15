@@ -37,11 +37,13 @@ mkdir -p clusters/cluster1/group_vars
 ssh-copy-id k8s-user@192.168.2.120
 ssh-copy-id k8s-user@192.168.2.121
 ssh-copy-id k8s-user@192.168.2.122
+ssh-copy-id k8s-user@192.168.2.123
 
 # 事前接続&確認
 ssh k8s-user@192.168.2.120 "hostname"
 ssh k8s-user@192.168.2.121 "hostname"
 ssh k8s-user@192.168.2.122 "hostname"
+ssh k8s-user@192.168.2.123 "hostname"
 ```
 
 ## 実行

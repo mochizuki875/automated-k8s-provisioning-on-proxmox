@@ -33,6 +33,7 @@ terraform/
 ### 必要なツール
 - Terraform >= 1.9
 - Terragrunt >= 0.45
+- [telmate/proxmox](https://github.com/Telmate/terraform-provider-proxmox/blob/master/docs/guides/installation.md)
 
 ### Proxmox側の準備
 #### 1. VMテンプレートの作成
@@ -51,7 +52,7 @@ qm destroy 9000
 pveum user add terraform@pve
 
 # Terraformロールを作成
-pveum role add TerraformRole -privs "VM.Allocate VM.Clone VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options VM.Audit VM.PowerMgmt VM.Migrate Datastore.AllocateSpace Datastore.Audit Pool.Allocate Sys.Audit Sys.Modify Sys.Console SDN.Use"
+pveum role add TerraformRole -privs "VM.Allocate VM.Clone VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options VM.Audit VM.PowerMgmt VM.Migrate Datastore.AllocateSpace Datastore.Audit Pool.Allocate Sys.Audit Sys.Modify Sys.Console SDN.Use Pool.Audit"
 
 # ユーザーに権限を付与 (パス: /)
 pveum aclmod / -user terraform@pve -role TerraformRole
@@ -70,6 +71,19 @@ pveum user token add terraform@pve terraform --privsep 0
 │ value        │ xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx │
 └──────────────┴──────────────────────────────────────┘
 ```
+
+{{collapse(Proxmoxのロールに特定の権限を追加)
+
+```bash
+pveum role modify TerraformRole -privs "既存の権限 追加したい権限"
+```
+
+例: `Pool.Audit`を追加
+```bash
+pveum role modify TerraformRole -privs "VM.Allocate VM.Clone VM.Config.CDROM VM.Config.CPU VM.Config.Cloudinit VM.Config.Disk VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options VM.Audit VM.PowerMgmt VM.Migrate Datastore.AllocateSpace Datastore.Audit Pool.Allocate Sys.Audit Sys.Modify Sys.Console SDN.Use Pool.Audit"
+```
+
+}}
 
 APIトークンを環境変数に設定
 ```bash

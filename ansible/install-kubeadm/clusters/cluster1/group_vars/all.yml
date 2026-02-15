@@ -1,7 +1,7 @@
 # Kubernetes and container runtime versions
-kubernetes_version: "1.34"
-containerd_version: "2.2.0"
-runc_version: "1.3.3"
+kubernetes_version: "1.35"
+containerd_version: "2.2.1"
+runc_version: "1.4.0"
 cni_version: "1.8.0"
 
 # Installation paths
@@ -22,7 +22,7 @@ kubeadm_config_content: |
   ---
   apiVersion: kubeadm.k8s.io/v1beta4
   kind: ClusterConfiguration
-  kubernetesVersion: v1.34.2
+  kubernetesVersion: v1.35.1
   clusterName: kubernetes
   controlPlaneEndpoint: k8s-cluster1-cp01:6443
   certificatesDir: /etc/kubernetes/pki

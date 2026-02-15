@@ -1,0 +1,48 @@
+nodeSelector: 
+    kubernetes.io/os: linux
+    node-role.kubernetes.io/control-plane: ""
+
+tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+
+logLevel: INFO
+
+discover:
+  tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+
+csi:
+  pluginTolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane
+  - effect: NoExecute
+    key: node.kubernetes.io/not-ready
+    operator: Exists
+    tolerationSeconds: 300
+  - effect: NoExecute
+    key: node.kubernetes.io/unreachable
+    operator: Exists
+    tolerationSeconds: 300
+
+monitoring:
+  # -- Enable monitoring. Requires Prometheus to be pre-installed.
+  # Enabling will also create RBAC rules to allow Operator to create ServiceMonitors
+  enabled: false

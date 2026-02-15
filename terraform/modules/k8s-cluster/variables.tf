@@ -76,16 +76,18 @@ variable "vm_spec" {
 variable "cp_spec" {
   description = "ControlPlaneノードのデフォルトスペック"
   type = object({
-    cores     = number
-    sockets   = number
-    memory    = number
-    disk_size = string
+    cores      = number
+    sockets    = number
+    memory     = number
+    disk1_size = string
+    disk2_size = string
   })
   default = {
-    cores     = 2
-    sockets   = 1
-    memory    = 4096
-    disk_size = "50G"
+    cores      = 2
+    sockets    = 1
+    memory     = 4096
+    disk1_size = "50G"
+    disk2_size = "100G"
   }
 }
 
@@ -93,16 +95,18 @@ variable "cp_spec" {
 variable "node_spec" {
   description = "Nodeのデフォルトスペック"
   type = object({
-    cores     = number
-    sockets   = number
-    memory    = number
-    disk_size = string
+    cores      = number
+    sockets    = number
+    memory     = number
+    disk1_size = string
+    disk2_size = string
   })
   default = {
-    cores     = 4
-    sockets   = 1
-    memory    = 8192
-    disk_size = "50G"
+    cores      = 4
+    sockets    = 1
+    memory     = 8192
+    disk1_size = "50G"
+    disk2_size = "100G"
   }
 }
 
@@ -110,14 +114,15 @@ variable "node_spec" {
 variable "vms" {
   description = "作成するVMのリスト"
   type = list(object({
-    name        = string
+    name       = string
     target_node = string
-    vm_id       = number
-    ip_address  = string
-    role        = string          # "ControlPlane" または "Node"
-    cores       = optional(number)
-    sockets     = optional(number)
-    memory      = optional(number)
-    disk_size   = optional(string)
+    vm_id      = number
+    ip_address = string
+    role       = string          # "ControlPlane" または "Node"
+    cores      = optional(number)
+    sockets    = optional(number)
+    memory     = optional(number)
+    disk1_size = optional(string)
+    disk2_size = optional(string)
   }))
 }

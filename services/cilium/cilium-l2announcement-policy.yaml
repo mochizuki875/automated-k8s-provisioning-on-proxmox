@@ -1,0 +1,20 @@
+apiVersion: cilium.io/v2alpha1
+kind: CiliumL2AnnouncementPolicy
+metadata:
+  name: l2announcement-policy
+spec:
+  # どのServiceに対してL2 Announcementを行うか
+  serviceSelector:
+    matchLabels: {}  # すべてのServiceにマッチ
+  # どのノードからアナウンスするか
+  nodeSelector:
+    matchExpressions:
+      - key: node-role.kubernetes.io/control-plane
+        operator: DoesNotExist  # ワーカーノードのみ
+  # どのインターフェースを使うか
+  interfaces:
+    - ^eth[0-9]+  # eth0, eth1などにマッチする正規表現
+  # 外部IPを含めるか
+  externalIPs: true
+  # LoadBalancer IPを含めるか
+  loadBalancerIPs: true

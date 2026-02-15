@@ -1,0 +1,12 @@
+repositories:
+- name: rook-release
+  url: https://charts.rook.io/release
+
+releases:
+  - name: rook-ceph
+    namespace: rook-ceph
+    createNamespace: true 
+    chart: rook-release/rook-ceph
+    version: v1.19.1
+    values:
+    - values.yaml

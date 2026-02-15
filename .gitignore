@@ -1,0 +1,42 @@
+# Terragrunt/Terraform state files
+**/.terragrunt-cache/
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Crash log files
+crash.log
+crash.*.log
+
+# 環境変数ファイル
+.env
+*.env
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration files
+.terraformrc
+terraform.rc
+
+# IDE設定
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS固有ファイル
+.DS_Store
+Thumbs.db
+
+# サービス固有
+services/proxmox-csi-plugin/
+
+# 旧terraform設定(参考用に残す)
+# terraform/terraform.tfvars

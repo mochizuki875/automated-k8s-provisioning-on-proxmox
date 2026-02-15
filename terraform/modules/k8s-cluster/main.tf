@@ -21,9 +21,9 @@ resource "proxmox_vm_qemu" "k8s_vms" {
   full_clone = true
   
   # VM起動設定
-  onboot  = true
-  agent   = 1
-  boot    = "order=scsi0"
+  start_at_node_boot = true
+  agent              = 1
+  boot               = "order=scsi0"
   
   # SCSIコントローラー設定
   scsihw = "virtio-scsi-single"
@@ -62,8 +62,18 @@ resource "proxmox_vm_qemu" "k8s_vms" {
         disk {
           storage  = var.vm_spec.storage
           size     = coalesce(
-            each.value.disk_size,
-            each.value.role == "ControlPlane" ? var.cp_spec.disk_size : var.node_spec.disk_size
+            each.value.disk1_size,
+            each.value.role == "ControlPlane" ? var.cp_spec.disk1_size : var.node_spec.disk1_size
+          )
+          iothread = true
+        }
+      }
+      scsi1 {
+        disk {
+          storage  = var.vm_spec.storage
+          size     = coalesce(
+            each.value.disk2_size,
+            each.value.role == "ControlPlane" ? var.cp_spec.disk2_size : var.node_spec.disk2_size
           )
           iothread = true
         }
@@ -97,7 +107,6 @@ resource "proxmox_vm_qemu" "k8s_vms" {
   lifecycle {
     ignore_changes = [
       network,
-      disk,
     ]
   }
 }

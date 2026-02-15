@@ -1,0 +1,59 @@
+autoDirectNodeRoutes: true
+routingMode: "native"
+ipv4NativeRoutingCIDR: "10.0.0.0/16"
+
+# -- Enable kube-proxy replacement mode.
+# https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/
+kubeProxyReplacement: "true"
+k8sServiceHost: 192.168.2.120 # corednsが使用できないのでAPIサーバーのIPを直接指定
+k8sServicePort: 6443
+
+# LoadBalancer IP Address Management (LB IPAM)
+# https://docs.cilium.io/en/stable/network/lb-ipam/
+l2announcements:
+  # -- Enable L2 Announcements for BGP/MetalLB integration.
+  # https://docs.cilium.io/en/stable/network/l2-announcements/
+  enabled: true
+externalIPs: 
+  # -- Enable support for ExternalIPs.
+  enabled: true
+
+ingressController:
+  # -- Enable cilium ingress controller
+  # This will automatically set enable-envoy-config as well.
+  enabled: true
+
+# -- Enable Gateway API support
+# https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/
+gatewayAPI:
+  enabled: true
+
+ipam:
+  # -- Configure IP Address Management mode.
+  # ref: https://docs.cilium.io/en/stable/network/concepts/ipam/
+  # mode: "cluster-pool"
+  mode: "kubernetes"
+
+hubble:
+  # -- Enable Hubble (true by default).
+  enabled: true
+  relay:
+    # -- Enable Hubble Relay (requires hubble.enabled=true)
+    enabled: true
+  ui:
+    # -- Whether to enable the Hubble UI.
+    enabled: true
+    # -- hubble-relay service configuration.
+    service:
+      # --- The type of service used for Hubble Relay access, either ClusterIP, NodePort or LoadBalancer.
+      type: LoadBalancer
+      # --- The port to use when the service type is set to NodePort.
+      nodePort: 31234
+  metrics:
+    enabled:
+    - dns:query;ignoreAAAA
+    - drop
+    - tcp
+    - flow
+    - icmp
+    - http
