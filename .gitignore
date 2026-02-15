@@ -14,6 +14,10 @@ crash.*.log
 .env
 *.env
 
+# 変数ファイル(機密情報を含む可能性があるため)
+terraform.tfvars
+*.auto.tfvars
+
 # Override files
 override.tf
 override.tf.json
