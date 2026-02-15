@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: s3client
+spec:
+  containers:
+    - name: s3client
+      image: rook/ceph:master
+      command:
+          - /bin/bash
+          - -c
+          - |
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+            sudo ./aws/install
+            mkdir ~/.aws
+            cat > ~/.aws/credentials << EOF
+            [default]
+            aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+            aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+            endpoint_url = ${S3_ENDPOINT_URL}
+            EOF
+            sleep infinity
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+      env:
+        - name: AWS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ceph-bucket  # OBCに応じて変更
+              key: BUCKET_HOST
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: ceph-bucket  # OBCに応じて変更
+              key: BUCKET_PORT
+        - name: BUCKET_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: ceph-bucket  # OBCに応じて変更
+              key: BUCKET_NAME
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: ceph-bucket  # OBCに応じて変更
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ceph-bucket  # OBCに応じて変更
+              key: AWS_SECRET_ACCESS_KEY
+        - name: S3_ENDPOINT_URL
+          value: http://$(AWS_HOST):$(PORT)
+  terminationGracePeriodSeconds: 0
+  tolerations:
+    - key: "node.kubernetes.io/unreachable"
+      operator: "Exists"
+      effect: "NoExecute"
+      tolerationSeconds: 5

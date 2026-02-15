@@ -1,0 +1,35 @@
+repositories:
+  - name: proxmox-csi
+    url: ghcr.io/sergelogvinov/charts
+    oci: true
+
+releases:
+  - name: proxmox-csi-plugin
+    namespace: csi-proxmox
+    createNamespace: true
+    chart: proxmox-csi/proxmox-csi-plugin
+    version: 0.5.1
+    values:
+      - values.yaml
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: "bash"
+        args:
+          - "-c"
+          - |
+            kubectl label node k8s-cluster1-cp01 topology.kubernetes.io/region=pve-cluster --overwrite
+            kubectl label node k8s-cluster1-node01 topology.kubernetes.io/region=pve-cluster --overwrite
+            kubectl label node k8s-cluster1-node02 topology.kubernetes.io/region=pve-cluster --overwrite
+            kubectl label node k8s-cluster1-node03 topology.kubernetes.io/region=pve-cluster --overwrite
+            kubectl label node k8s-cluster1-cp01 topology.kubernetes.io/zone=pve01 --overwrite
+            kubectl label node k8s-cluster1-node01 topology.kubernetes.io/zone=pve01 --overwrite
+            kubectl label node k8s-cluster1-node02 topology.kubernetes.io/zone=pve01 --overwrite
+            kubectl label node k8s-cluster1-node03 topology.kubernetes.io/zone=pve01 --overwrite
+      - events: ["postsync"]
+        showlogs: true
+        command: "bash"
+        args:
+          - "-c"
+          - |
+            kubectl patch storageclass proxmox-data -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'

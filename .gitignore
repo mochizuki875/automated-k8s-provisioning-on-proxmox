@@ -35,8 +35,14 @@ terraform.rc
 .DS_Store
 Thumbs.db
 
+# sampleディレクトリの除外
+sample/
+
+# メモファイルの除外
+memo.md
+
 # サービス固有
-services/proxmox-csi-plugin/
+services/proxmox-csi-plugin/setup/values.yaml
 
 # 旧terraform設定(参考用に残す)
 # terraform/terraform.tfvars
