@@ -1,0 +1,11 @@
+repositories:
+  - name: victoria-metrics
+    url: https://victoriametrics.github.io/helm-charts/
+
+releases:
+  - name: vmks
+    namespace: monitoring
+    chart: victoria-metrics/victoria-metrics-k8s-stack
+    version: "0.72.2"
+    values:
+      - values.yaml

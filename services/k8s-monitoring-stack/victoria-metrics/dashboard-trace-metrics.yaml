@@ -1,0 +1,846 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-trace-metrics
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  trace-metrics.json: |
+    {
+      "title": "Trace Metrics",
+      "uid": "trace-metrics",
+      "description": "Tempo local_blocks (TraceQL metrics) によるトレースメトリクスのモニタリング。Data Source / Namespace / Service でフィルタリング可能。exemplar をクリックするとトレースへ遷移できます。",
+      "schemaVersion": 38,
+      "version": 3,
+      "refresh": "10s",
+      "graphTooltip": 1,
+      "time": {
+        "from": "now-15m",
+        "to": "now"
+      },
+      "tags": [
+        "tracing",
+        "tempo",
+        "metrics"
+      ],
+      "links": [],
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "label": "Data Source",
+            "query": "tempo",
+            "current": {},
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "options": [],
+            "regex": "^Tempo$",
+            "refresh": 1
+          },
+          {
+            "name": "vm_ds",
+            "type": "datasource",
+            "label": "VictoriaMetrics",
+            "query": "prometheus",
+            "current": {},
+            "hide": 2,
+            "includeAll": false,
+            "multi": false,
+            "options": [],
+            "regex": "VictoriaMetrics$",
+            "refresh": 1
+          },
+          {
+            "name": "namespace",
+            "type": "query",
+            "label": "Namespace",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${vm_ds}"
+            },
+            "query": "label_values(traces_spanmetrics_calls_total, service_namespace)",
+            "current": {},
+            "hide": 0,
+            "includeAll": true,
+            "allValue": ".*",
+            "multi": true,
+            "sort": 1,
+            "refresh": 2
+          },
+          {
+            "name": "service",
+            "type": "query",
+            "label": "Service",
+            "datasource": {
+              "type": "prometheus",
+              "uid": "${vm_ds}"
+            },
+            "query": "label_values(traces_spanmetrics_calls_total, service)",
+            "current": {},
+            "hide": 0,
+            "includeAll": true,
+            "allValue": ".*",
+            "multi": true,
+            "sort": 1,
+            "refresh": 2
+          }
+        ]
+      },
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": {
+              "type": "grafana",
+              "uid": "-- Grafana --"
+            },
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0,211,255,1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "id": 1,
+          "title": "概要",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "collapsed": false
+        },
+        {
+          "type": "stat",
+          "id": 10,
+          "title": "リクエスト数 (期間内合計)",
+          "description": "選択期間内のスパン総数。",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 1
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "sum"
+              ]
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | count_over_time()",
+              "legendFormat": "",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 11,
+          "title": "エラー数 (期間内合計)",
+          "description": "選択期間内のエラースパン総数。",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 1
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 1
+                  },
+                  {
+                    "color": "red",
+                    "value": 10
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "sum"
+              ]
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\" && status = error} | count_over_time()",
+              "legendFormat": "",
+              "instant": true
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 12,
+          "title": "平均リクエストレート (期間内)",
+          "description": "選択期間内の平均 span/sec。時間窓全体のデータを平均して算出。",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 1
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "blue",
+                    "value": null
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ]
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | rate()",
+              "legendFormat": "",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "id": 13,
+          "title": "p99 レイテンシ (期間平均)",
+          "description": "選択期間内の p99 レイテンシ平均値。時間窓全体のデータを平均して算出。",
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 1
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ns",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "yellow",
+                    "value": 500000000
+                  },
+                  {
+                    "color": "red",
+                    "value": 1000000000
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "mean"
+              ]
+            },
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | quantile_over_time(duration, 0.99)",
+              "legendFormat": "",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "id": 2,
+          "title": "リクエスト / エラー",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 5
+          },
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "interval": "10s",
+          "id": 20,
+          "title": "リクエストレート (Requests / sec)",
+          "description": "サービス別スパンレート。exemplar をクリックするとそのトレースへ遷移できます。",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 6
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 5,
+                "showPoints": "auto"
+              },
+              "links": []
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | rate() by (resource.service.name)",
+              "legendFormat": "{{resource.service.name}}",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "interval": "10s",
+          "id": 21,
+          "title": "エラーレート (Errors / sec)",
+          "description": "status = error のスパンレート。",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 6
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 10,
+                "showPoints": "auto"
+              },
+              "links": [],
+              "color": {
+                "mode": "palette-classic",
+                "fixedColor": "red"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\" && status = error} | rate() by (resource.service.name)",
+              "legendFormat": "{{resource.service.name}} (error)",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "id": 3,
+          "title": "エラー詳細",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 14
+          },
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "interval": "10s",
+          "id": 30,
+          "title": "エラー数 (Error Count)",
+          "description": "単位時間あたりのエラースパン数。",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 15
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 5,
+                "showPoints": "auto"
+              },
+              "links": [],
+              "color": {
+                "mode": "palette-classic",
+                "fixedColor": "semi-dark-red"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\" && status = error} | count_over_time() by (resource.service.name)",
+              "legendFormat": "{{resource.service.name}}",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "interval": "10s",
+          "id": 31,
+          "title": "スパン種別別リクエストレート (Span Kind)",
+          "description": "SERVER / CLIENT / PRODUCER / CONSUMER ごとのスパンレート。",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 15
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 5,
+                "showPoints": "auto"
+              },
+              "links": []
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | rate() by (span.kind)",
+              "legendFormat": "{{span.kind}}",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "id": 4,
+          "title": "レイテンシ (Latency)",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 23
+          },
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "interval": "10s",
+          "id": 40,
+          "title": "レイテンシ p99 / p95 / p50 (サービス別)",
+          "description": "TraceQL の quantile_over_time によるレイテンシパーセンタイル。exemplar をクリックすると低速トレースへ遷移できます。",
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 24
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ns",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 5,
+                "showPoints": "auto"
+              },
+              "links": []
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | quantile_over_time(duration, 0.99) by (resource.service.name)",
+              "legendFormat": "p99 {{resource.service.name}}",
+              "instant": false,
+              "exemplars": 100
+            },
+            {
+              "refId": "B",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | quantile_over_time(duration, 0.95) by (resource.service.name)",
+              "legendFormat": "p95 {{resource.service.name}}",
+              "instant": false,
+              "exemplars": 100
+            },
+            {
+              "refId": "C",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | quantile_over_time(duration, 0.50) by (resource.service.name)",
+              "legendFormat": "p50 {{resource.service.name}}",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "id": 5,
+          "title": "スパン遅延分布 / HTTP ステータス",
+          "gridPos": {
+            "h": 1,
+            "w": 24,
+            "x": 0,
+            "y": 32
+          },
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "interval": "10s",
+          "id": 50,
+          "title": "HTTP メソッド別リクエストレート",
+          "description": "GET / POST など HTTP メソッド別のスパンレート。",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 33
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 5,
+                "showPoints": "auto"
+              },
+              "links": []
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | rate() by (span.http.method)",
+              "legendFormat": "{{span.http.method}}",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "interval": "10s",
+          "id": 51,
+          "title": "HTTP ステータス別リクエストレート",
+          "description": "HTTP ステータスコード別のスパンレート。",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 33
+          },
+          "datasource": {
+            "type": "tempo",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "reqps",
+              "custom": {
+                "lineWidth": 2,
+                "fillOpacity": 5,
+                "showPoints": "auto"
+              },
+              "links": []
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "table",
+              "placement": "bottom",
+              "calcs": [
+                "mean",
+                "max",
+                "lastNotNull"
+              ]
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": {
+                "type": "tempo",
+                "uid": "${datasource}"
+              },
+              "queryType": "traceql",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | rate() by (span.http.status_code)",
+              "legendFormat": "{{span.http.status_code}}",
+              "instant": false,
+              "exemplars": 100
+            }
+          ]
+        }
+      ]
+    }

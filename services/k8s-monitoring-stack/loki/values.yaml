@@ -1,0 +1,94 @@
+# =============================================================================
+# loki values.yaml
+# Grafana Loki - Monolithic (SingleBinary) モード設定
+# ファイルシステムストレージを使用し、proxmox-data StorageClass で永続化
+# =============================================================================
+
+# Monolithic (SingleBinary) デプロイモードを指定
+deploymentMode: SingleBinary
+
+# ---------------------------------------------------------------------------
+# Loki コア設定
+# ---------------------------------------------------------------------------
+loki:
+  # シングルテナント環境のため認証を無効化
+  auth_enabled: false
+
+  commonConfig:
+    path_prefix: /var/loki
+    # SingleBinary モードではレプリケーション係数を 1 に設定
+    replication_factor: 1
+
+  # ローカルファイルシステムストレージを使用
+  storage:
+    type: filesystem
+    filesystem:
+      chunks_directory: /var/loki/chunks
+      rules_directory: /var/loki/rules
+
+  # スキーマ設定 (Loki 3.x 推奨: TSDB + schema v13)
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  # Ruler 設定 (ローカルルールファイル用)
+  rulerConfig:
+    wal:
+      dir: /var/loki/ruler-wal
+
+# ---------------------------------------------------------------------------
+# SingleBinary (Monolithic) コンポーネント設定
+# ---------------------------------------------------------------------------
+singleBinary:
+  replicas: 1
+
+  # データ永続化設定
+  persistence:
+    enabled: true
+    enableStatefulSetAutoDeletePVC: true
+    size: 10Gi
+    storageClass: proxmox-data
+    accessModes:
+      - ReadWriteOnce
+
+  # SingleBinary の Pod Anti-Affinity を緩和 (replicas=1 のため不要)
+  affinity: {}
+
+# ---------------------------------------------------------------------------
+# 分散コンポーネントを無効化 (SingleBinary モードでは不要)
+# ---------------------------------------------------------------------------
+write:
+  replicas: 0
+
+read:
+  replicas: 0
+
+backend:
+  replicas: 0
+
+# ---------------------------------------------------------------------------
+# Nginx Gateway: SingleBinary モードでは不要なため無効化
+# Datasource URL: http://loki.monitoring.svc.cluster.local:3100
+# ---------------------------------------------------------------------------
+gateway:
+  enabled: false
+
+# ---------------------------------------------------------------------------
+# その他のコンポーネント無効化
+# ---------------------------------------------------------------------------
+lokiCanary:
+  enabled: false
+
+# lokiCanary 無効時は test も無効化が必要 (validate.yaml の要件)
+test:
+  enabled: false
+
+# Minio は使用しない (ファイルシステムストレージを使用)
+minio:
+  enabled: false

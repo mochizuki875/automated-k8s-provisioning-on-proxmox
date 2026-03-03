@@ -1,0 +1,34 @@
+# https://github.com/istio/istio/tree/release-1.29/manifests/profiles
+
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  # Turn on default components: base, pilot, and ingress gateway
+  # https://istio.io/latest/docs/setup/additional-setup/config-profiles/#deployment-profiles
+  profile: default
+  namespace: istio-system
+  values:
+    cni:
+      excludeNamespaces:
+      - istio-system
+      - kube-system
+  meshConfig:
+    accessLogFile: /dev/stdout
+    accessLogEncoding: JSON
+  components:
+    base:
+      enabled: true
+    pilot:
+      enabled: true
+    # Istio Gateway feature
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: true
+    egressGateways:
+    - name: istio-egressgateway
+      enabled: true
+    cni:
+      namespace: istio-system
+      enabled: true

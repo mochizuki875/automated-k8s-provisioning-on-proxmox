@@ -1,0 +1,196 @@
+# =============================================================================
+# victoria-metrics-k8s-stack values.yaml
+# Grafana と VictoriaMetrics (Single Server) のスタック設定
+# Metrics/Logging/Tracing の相関分析を実現するための Datasource 設定を含む
+# =============================================================================
+
+kubeEtcd:
+  service:
+    port: 2381
+    targetPort: 2381
+  vmScrape:
+    spec:
+      endpoints:
+        - port: http-metrics
+          scheme: http
+
+kubeControllerManager:
+  vmScrape:
+    spec:
+      endpoints:
+        - port: http-metrics
+          scheme: https
+          bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+          tlsConfig:
+            insecureSkipVerify: true
+
+kubeScheduler:
+  vmScrape:
+    spec:
+      endpoints:
+        - port: http-metrics
+          scheme: https
+          bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+          tlsConfig:
+            insecureSkipVerify: true
+
+# ---------------------------------------------------------------------------
+# VictoriaMetrics Single Server ストレージ設定
+# ---------------------------------------------------------------------------
+vmsingle:
+  spec:
+    retentionPeriod: "1"
+    replicaCount: 1
+    storage:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 20Gi
+      storageClassName: proxmox-data
+
+# ---------------------------------------------------------------------------
+# Grafana Datasource 設定
+# Metrics → Traces: VictoriaMetrics exemplar から Tempo へのリンク
+# Logs → Traces  : Loki derived fields から Tempo へのリンク
+# Traces → Metrics: Tempo サービスグラフ から VictoriaMetrics へのリンク
+# Traces → Logs  : Tempo から Loki へのリンク
+# ---------------------------------------------------------------------------
+defaultDatasources:
+  victoriametrics:
+    # VM の URL はチャートテンプレートで自動付与される
+    datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        isDefault: true
+        uid: victoriametrics
+        jsonData:
+          # レイテンシメトリクスの exemplar から Tempo トレースへのリンク
+          exemplarTraceIdDestinations:
+            - name: traceID
+              datasourceUid: tempo
+              urlDisplayLabel: "Tempo でトレースを表示"
+            - name: trace_id
+              datasourceUid: tempo
+              urlDisplayLabel: "Tempo でトレースを表示"
+      - name: VictoriaMetrics (DS)
+        isDefault: false
+        access: proxy
+        type: victoriametrics-metrics-datasource
+        uid: victoriametrics-ds
+
+  # 追加 Datasource: Loki (ログ) と Tempo (トレース)
+  extra:
+    # -------------------------------------------------------------------------
+    # Loki Datasource
+    # エラーログから Tempo トレースへリンクするための derived fields を設定
+    # -------------------------------------------------------------------------
+    - name: Loki
+      type: loki
+      access: proxy
+      uid: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      jsonData:
+        # ログ内のトレース ID を検出して Tempo へのリンクを生成する
+        derivedFields:
+          - name: TraceID
+            # 一般的なトレース ID のパターン (32文字 16進数)
+            matcherRegex: "(?:traceID|trace_id|traceId)[=: ]+([a-fA-F0-9]{32})"
+            url: "${__value.raw}"
+            datasourceUid: tempo
+            urlDisplayLabel: "Tempo でトレースを表示"
+          - name: TraceID_short
+            # 16文字の短いトレース ID にも対応
+            matcherRegex: "(?:traceID|trace_id|traceId)[=: ]+([a-fA-F0-9]{16})"
+            url: "${__value.raw}"
+            datasourceUid: tempo
+            urlDisplayLabel: "Tempo でトレースを表示"
+
+    # -------------------------------------------------------------------------
+    # Tempo Datasource
+    # トレースから Loki ログ・VictoriaMetrics メトリクスへのリンクを設定
+    # サービスグラフはメトリクスジェネレーターが VictoriaMetrics に書き込んだデータを利用
+    # -------------------------------------------------------------------------
+    - name: Tempo
+      type: tempo
+      access: proxy
+      uid: tempo
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      jsonData:
+        # トレースから Loki ログへのリンク
+        tracesToLogsV2:
+          datasourceUid: loki
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          filterByTraceID: true
+          filterBySpanID: true
+          tags:
+            - key: service.name
+              value: app
+            - key: k8s.pod.name
+              value: pod
+        # トレースから VictoriaMetrics メトリクスへのリンク
+        tracesToMetrics:
+          datasourceUid: victoriametrics
+          spanStartTimeShift: "-1m"
+          spanEndTimeShift: "1m"
+          tags:
+            - key: service.name
+              value: service
+          queries:
+            - name: "Request Rate"
+              query: 'sum(rate(traces_spanmetrics_calls_total{$__tags}[5m])) by (service)'
+            - name: "Error Rate"
+              query: 'sum(rate(traces_spanmetrics_calls_total{status_code="STATUS_CODE_ERROR",$__tags}[5m])) by (service)'
+            - name: "Latency p99"
+              query: 'histogram_quantile(0.99, sum(rate(traces_spanmetrics_latency_bucket{$__tags}[5m])) by (le, service))'
+        # サービスグラフ (Tempo metrics generator が VictoriaMetrics に書き込んだデータを利用)
+        serviceMap:
+          datasourceUid: victoriametrics
+        # ノードグラフ表示を有効化
+        nodeGraph:
+          enabled: true
+        # Loki でのトレース ID 検索連携
+        lokiSearch:
+          datasourceUid: loki
+        search:
+          hide: false
+
+# ---------------------------------------------------------------------------
+# Grafana 設定
+# ---------------------------------------------------------------------------
+grafana:
+  enabled: true
+
+  # VictoriaMetrics 専用の Grafana プラグインをインストール
+  plugins:
+    - victoriametrics-metrics-datasource
+
+  # Grafana 管理者パスワード
+  adminUser: admin
+  adminPassword: "admin"
+
+  # Grafana サービス設定 (LoadBalancer で公開)
+  service:
+    type: LoadBalancer
+    loadBalancerIP: "192.168.2.129"
+    targetPort: 3000
+
+  # Grafana データ永続化
+  persistence:
+    enabled: true
+    storageClassName: proxmox-data
+    size: 5Gi
+
+  # サイドカー設定 (ConfigMap 経由で Datasource/Dashboard を自動検出)
+  sidecar:
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      labelValue: "1"
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      multicluster: false

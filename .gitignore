@@ -41,6 +41,8 @@ Thumbs.db
 
 # sampleディレクトリの除外
 sample/
+gen-traces-test/
+istio-1*
 
 # メモファイルの除外
 memo.md

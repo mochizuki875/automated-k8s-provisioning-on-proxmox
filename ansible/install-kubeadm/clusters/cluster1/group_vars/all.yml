@@ -1,5 +1,11 @@
 # Kubernetes and container runtime versions
 kubernetes_version: "1.35"
+
+# Sysctl settings for Kubernetes nodes
+sysctl_settings:
+  # inotify: required for Istio CNI and other tools that watch many files
+  fs.inotify.max_user_instances: 512
+  fs.inotify.max_user_watches: 524288
 containerd_version: "2.2.1"
 runc_version: "1.4.0"
 cni_version: "1.8.0"

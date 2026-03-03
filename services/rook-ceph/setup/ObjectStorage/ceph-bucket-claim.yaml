@@ -3,5 +3,7 @@ kind: ObjectBucketClaim
 metadata:
   name: ceph-bucket
 spec:
+  bucketName: ceph-bucket
   generateBucketName: ceph-bucket
+  objectBucketName: ceph-bucket
   storageClassName: rook-ceph-bucket

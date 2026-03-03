@@ -1,0 +1,120 @@
+# =============================================================================
+# tempo values.yaml
+# Grafana Tempo - Single Binary モード設定
+# OTLP/Jaeger レシーバーを有効化
+# Metrics Generator でサービスグラフ・スパンメトリクスを VictoriaMetrics に送信
+# =============================================================================
+
+tempo:
+  # ---------------------------------------------------------------------------
+  # ストレージ設定 (ローカルファイルシステム)
+  # ---------------------------------------------------------------------------
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+
+  # ---------------------------------------------------------------------------
+  # トレースレシーバー設定
+  # OTLP (gRPC: 4317, HTTP: 4318) および Jaeger を有効化
+  # ---------------------------------------------------------------------------
+  receivers:
+    jaeger:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:14250
+        thrift_binary:
+          endpoint: 0.0.0.0:6832
+        thrift_compact:
+          endpoint: 0.0.0.0:6831
+        thrift_http:
+          endpoint: 0.0.0.0:14268
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+
+  # ---------------------------------------------------------------------------
+  # Metrics Generator 設定
+  # サービスグラフ・スパンメトリクスを生成して VictoriaMetrics へ送信
+  # これにより Grafana の serviceMap (サービスグラフ) 機能が利用可能になる
+  # ---------------------------------------------------------------------------
+  metricsGenerator:
+    enabled: true
+    # VictoriaMetrics VMSingle の remote_write エンドポイント
+    # リリース名: victoria-metrics, Namespace: monitoring の場合のサービス URL
+    remoteWriteUrl: "http://vmsingle-vm-victoria-metrics-k8s-stack.monitoring.svc.cluster.local:8428/api/v1/write"
+    processor:
+      service_graphs:
+        wait: 10s
+        max_items: 10000
+        dimensions:
+          - service.namespace
+          - service.version
+      span_metrics:
+        enable_target_info: true
+        dimensions:
+          - service.namespace
+          - service.version
+          - http.method
+          - http.status_code
+      local_blocks:
+        # Grafana Traces Drilldown の TraceQL metrics に必要
+        # メモリ上にトレースブロックを保持して TraceQL クエリを処理する
+        flush_check_period: 10s
+        trace_idle_period: 10s
+        max_block_duration: 24h
+        max_block_bytes: 524288000  # 500 MiB
+        filter_server_spans: false
+        complete_block_timeout: 24h  # 1h → 24h: 完了ブロックを 24h 保持し exemplar を長期間返せるようにする
+    storage:
+      # Metrics Generator のメトリクスブロック保存パス (PVC マウント先 /var/tempo 配下)
+      path: "/var/tempo/metrics"
+      remote_write: []
+    traces_storage:
+      # Metrics Generator の WAL パス (デフォルト /tmp/traces は ephemeral なため PVC 配下に変更)
+      path: "/var/tempo/metrics-wal"
+
+  # ---------------------------------------------------------------------------
+  # Metrics Generator プロセッサーを全テナントに対して有効化
+  # ---------------------------------------------------------------------------
+  overrides:
+    defaults:
+      metrics_generator:
+        processors:
+          - service-graphs
+          - span-metrics
+          - local-blocks
+    per_tenant_override_config: /conf/overrides.yaml
+
+  # ---------------------------------------------------------------------------
+  # サーバー設定
+  # ---------------------------------------------------------------------------
+  server:
+    http_listen_port: 3200
+
+  # トレースデータ保持期間
+  retention: 24h
+
+# ---------------------------------------------------------------------------
+# データ永続化設定
+# ---------------------------------------------------------------------------
+persistence:
+  enabled: true
+  enableStatefulSetAutoDeletePVC: true
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  storageClassName: proxmox-data
+
+# ---------------------------------------------------------------------------
+# ServiceMonitor 設定
+# VictoriaMetrics Operator は VMServiceScrape を使用するため無効化
+# ---------------------------------------------------------------------------
+serviceMonitor:
+  enabled: false

@@ -1,0 +1,127 @@
+# Grafana Alloy values
+# Promtailの後継。Kubernetes Podログを収集しLokiへ転送する。
+
+alloy:
+  # DaemonSet として全Nodeでログ収集するための設定
+  mounts:
+    varlog: false          # loki.source.kubernetes はK8s APIから取得するためマウント不要
+    dockercontainers: false
+
+  storagePath: /tmp/alloy  # WAL保存パス（再起動時のデータロスト許容）
+
+  # Alloy River 設定
+  # - discovery.kubernetes: Pod一覧を取得
+  # - discovery.relabel:    ラベルを整形
+  # - loki.source.kubernetes: K8s API経由でPodログをストリーミング取得
+  # - loki.process:         CRI解析・traceID抽出
+  # - loki.write:           Lokiへ送信
+  configMap:
+    create: true
+    content: |
+      // ── Pod の検出 ──────────────────────────────────────────
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // ── ラベルの整形 ─────────────────────────────────────────
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        // 終了済みPodは除外
+        rule {
+          source_labels = ["__meta_kubernetes_pod_phase"]
+          regex         = "Succeeded|Failed|Completed"
+          action        = "drop"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        // app.kubernetes.io/name ラベルがあれば app ラベルとして使用
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          regex         = "(.+)"
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_name"]
+          separator     = "/"
+          target_label  = "job"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+      }
+
+      // ── K8s API 経由でログストリーミング ──────────────────────
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.process.pod_logs.receiver]
+      }
+
+      // ── ログ処理パイプライン ──────────────────────────────────
+      loki.process "pod_logs" {
+        forward_to = [loki.write.loki.receiver]
+
+        // containerd/CRI-O ログフォーマット解析
+        stage.cri {}
+
+        // JSON ログから traceID を抽出（複数キー名に対応）
+        stage.json {
+          expressions = {
+            traceID = "traceID",
+          }
+        }
+        stage.json {
+          expressions = {
+            traceID = "trace_id",
+          }
+        }
+
+        // プレーンテキストログから traceID を正規表現で抽出
+        stage.regex {
+          expression = "(?i)(?:traceid|trace_id)[=:\\s]+(?P<traceID>[a-f0-9]{16,32})"
+        }
+
+        // 抽出した traceID を Loki ストリームラベルに昇格
+        // （抽出できなかった場合は空値のためラベルは付与されない）
+        stage.labels {
+          values = {
+            traceID = "",
+          }
+        }
+      }
+
+      // ── Loki への書き込み ─────────────────────────────────────
+      loki.write "loki" {
+        endpoint {
+          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+# DaemonSet として全Nodeに配置
+controller:
+  type: daemonset
+  tolerations:
+    - effect: NoSchedule
+      operator: Exists
+    - effect: NoExecute
+      operator: Exists
+
+# ServiceMonitor 無効（VictoriaMetrics は VMServiceScrape を使用）
+serviceMonitor:
+  enabled: false
+
+# RBAC: Pod/Node ログ読み取りのためのClusterRole作成（デフォルトtrue）
+rbac:
+  create: true

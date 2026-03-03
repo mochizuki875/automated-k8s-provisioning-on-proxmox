@@ -1,0 +1,103 @@
+# =============================================================================
+# Istio メトリクス収集設定
+# https://istio.io/latest/docs/ops/integrations/prometheus/
+#
+# [収集対象]
+# 1. istiod (コントロールプレーン): http-monitoring ポート (15014)
+# 2. Envoy sidecar / Gateway: :15020/stats/prometheus (metrics merging)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. istiod コントロールプレーン メトリクス
+#    - istiod Service の http-monitoring ポートをスクレイプ
+# -----------------------------------------------------------------------------
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: istio-istiod
+  namespace: istio-system
+spec:
+  selector:
+    matchLabels:
+      app: istiod
+  namespaceSelector:
+    matchNames:
+      - istio-system
+  endpoints:
+    - port: http-monitoring
+      path: /metrics
+      scheme: http
+      interval: 30s
+      relabelConfigs:
+        - targetLabel: job
+          replacement: istiod
+
+---
+# -----------------------------------------------------------------------------
+# 2. Istio IngressGateway / EgressGateway メトリクス
+#    - Gateway Pod の http-envoy-prom (15090) ポートをスクレイプ
+#    - Gateway Service には15090が未公開のため VMPodScrape を使用
+# -----------------------------------------------------------------------------
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: istio-gateways
+  namespace: istio-system
+spec:
+  namespaceSelector:
+    matchNames:
+      - istio-system
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - istio-ingressgateway
+          - istio-egressgateway
+  podMetricsEndpoints:
+    - port: http-envoy-prom
+      path: /stats/prometheus
+      scheme: http
+      interval: 30s
+      relabelConfigs:
+        - targetLabel: job
+          replacement: envoy-stats
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: app
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+
+---
+# -----------------------------------------------------------------------------
+# 3. Envoy sidecar メトリクス (全 Namespace の Istio 注入 Pod)
+#    - istio-proxy コンテナの http-envoy-prom (15090) ポートをスクレイプ
+#    - security.istio.io/tlsMode ラベルを持つ Pod (サイドカー注入済み) を対象
+# -----------------------------------------------------------------------------
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: istio-envoy-sidecar
+  namespace: monitoring
+spec:
+  # 全 Namespace の Istio sidecar 注入済み Pod を対象
+  namespaceSelector:
+    any: true
+  selector:
+    matchExpressions:
+      - key: security.istio.io/tlsMode
+        operator: Exists
+  podMetricsEndpoints:
+    - port: http-envoy-prom
+      path: /stats/prometheus
+      scheme: http
+      interval: 30s
+      relabelConfigs:
+        - targetLabel: job
+          replacement: envoy-stats
+        # Pod 名・Namespace・Node 情報をラベルとして付与
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node

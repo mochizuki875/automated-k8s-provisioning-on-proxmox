@@ -1,0 +1,15 @@
+---
+- name: Configure sysctl settings on Kubernetes nodes
+  hosts: k8s_nodes
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Apply sysctl settings
+      ansible.posix.sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        sysctl_file: /etc/sysctl.d/99-kubernetes.conf
+        reload: yes
+      loop: "{{ sysctl_settings | dict2items }}"
