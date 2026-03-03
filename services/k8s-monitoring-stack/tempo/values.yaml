@@ -47,8 +47,8 @@ tempo:
   metricsGenerator:
     enabled: true
     # VictoriaMetrics VMSingle の remote_write エンドポイント
-    # リリース名: victoria-metrics, Namespace: monitoring の場合のサービス URL
-    remoteWriteUrl: "http://vmsingle-vm-victoria-metrics-k8s-stack.monitoring.svc.cluster.local:8428/api/v1/write"
+    # helmfile リリース名: vmks → サービス名: vmsingle-vmks-victoria-metrics-k8s-stack
+    remoteWriteUrl: "http://vmsingle-vmks-victoria-metrics-k8s-stack.monitoring.svc.cluster.local:8428/api/v1/write"
     processor:
       service_graphs:
         wait: 10s

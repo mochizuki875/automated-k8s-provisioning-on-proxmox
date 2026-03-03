@@ -9,6 +9,18 @@ alloy:
 
   storagePath: /tmp/alloy  # WAL保存パス（再起動時のデータロスト許容）
 
+  # OTLP ポートを Pod・Service に公開
+  # アプリは alloy.monitoring.svc.cluster.local:4317 (gRPC) / :4318 (HTTP) へ送信
+  extraPorts:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+
   # Alloy River 設定
   # - discovery.kubernetes: Pod一覧を取得
   # - discovery.relabel:    ラベルを整形
@@ -106,6 +118,38 @@ alloy:
       loki.write "loki" {
         endpoint {
           url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+      // ── OTLP レシーバー (アプリからのトレース受信) ────────────
+      // gRPC: 4317 / HTTP: 4318 で受け付ける
+      otelcol.receiver.otlp "default" {
+        grpc {
+          endpoint = "0.0.0.0:4317"
+        }
+        http {
+          endpoint = "0.0.0.0:4318"
+        }
+        output {
+          traces = [otelcol.processor.batch.default.input]
+        }
+      }
+
+      // ── バッチ処理 ────────────────────────────────────────────
+      otelcol.processor.batch "default" {
+        output {
+          traces = [otelcol.exporter.otlp.tempo.input]
+        }
+      }
+
+      // ── Tempo へのトレース転送 ────────────────────────────────
+      // tempo.monitoring.svc.cluster.local:4317 (OTLP gRPC)
+      otelcol.exporter.otlp "tempo" {
+        client {
+          endpoint = "tempo.monitoring.svc.cluster.local:4317"
+          tls {
+            insecure = true
+          }
         }
       }
 
