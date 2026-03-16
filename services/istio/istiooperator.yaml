@@ -17,6 +17,14 @@ spec:
   meshConfig:
     accessLogFile: /dev/stdout
     accessLogEncoding: JSON
+    defaultProviders:
+      tracing:
+      - otel-alloy
+    extensionProviders:
+    - name: otel-alloy
+      opentelemetry:
+        service: alloy.monitoring.svc.cluster.local
+        port: 4317
   components:
     base:
       enabled: true

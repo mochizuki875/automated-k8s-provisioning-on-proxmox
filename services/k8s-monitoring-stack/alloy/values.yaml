@@ -7,6 +7,17 @@ alloy:
     varlog: false          # loki.source.kubernetes はK8s APIから取得するためマウント不要
     dockercontainers: false
 
+    # systemd journal マウント（kubelet / containerd ログ収集用）
+    extra:
+      - name: journal
+        mountPath: /var/log/journal
+        readOnly: true
+      # machine-id マウント（loki.source.journal がジャーナルのサブディレクトリを特定するために必要）
+      # コンテナ独自の machine-id では /var/log/journal/<host-machine-id>/ が見つからないため
+      - name: machine-id
+        mountPath: /etc/machine-id
+        readOnly: true
+
   storagePath: /tmp/alloy  # WAL保存パス（再起動時のデータロスト許容）
 
   # OTLP ポートを Pod・Service に公開
@@ -16,26 +27,30 @@ alloy:
       port: 4317
       targetPort: 4317
       protocol: TCP
+      appProtocol: grpc
     - name: otlp-http
       port: 4318
       targetPort: 4318
       protocol: TCP
 
   # Alloy River 設定
-  # - discovery.kubernetes: Pod一覧を取得
-  # - discovery.relabel:    ラベルを整形
+  # - discovery.kubernetes:  Pod一覧を取得
+  # - discovery.relabel:     ラベルを整形
   # - loki.source.kubernetes: K8s API経由でPodログをストリーミング取得
-  # - loki.process:         CRI解析・traceID抽出
-  # - loki.write:           Lokiへ送信
+  # - loki.process:          CRI解析・traceID抽出
+  # - loki.source.journal:   systemd journal経由でkubelet/containerdログを収集
+  # - loki.write:            Lokiへ送信
   configMap:
     create: true
     content: |
       // ── Pod の検出 ──────────────────────────────────────────
+      // Kubernetes API から全Podの情報を取得し、__meta_kubernetes_*という内部ラベルとして保持
       discovery.kubernetes "pods" {
         role = "pod"
       }
 
       // ── ラベルの整形 ─────────────────────────────────────────
+      // 内部ラベル(__meta_kubernetes_*)をLokiに渡すストリームラベルに変換
       discovery.relabel "pod_logs" {
         targets = discovery.kubernetes.pods.targets
 
@@ -76,6 +91,7 @@ alloy:
       }
 
       // ── K8s API 経由でログストリーミング ──────────────────────
+      // ログ本文を解析してラベル抽出・追加
       loki.source.kubernetes "pods" {
         targets    = discovery.relabel.pod_logs.output
         forward_to = [loki.process.pod_logs.receiver]
@@ -88,36 +104,107 @@ alloy:
         // containerd/CRI-O ログフォーマット解析
         stage.cri {}
 
-        // JSON ログから traceID を抽出（複数キー名に対応）
+        // ① JSON ログからの抽出（全フィールドを一括）
+        // traceID / spanID は複数キー名に対応（_a = CamelCase, _b = snake_case）
+        // level は level / severity / lvl に対応
         stage.json {
           expressions = {
-            traceID = "traceID",
-          }
-        }
-        stage.json {
-          expressions = {
-            traceID = "trace_id",
+            _tid_a = "traceID",
+            _tid_b = "trace_id",
+            _sid_a = "spanID",
+            _sid_b = "span_id",
+            _lvl_a = "level",
+            _lvl_b = "severity",
+            _lvl_c = "lvl",
           }
         }
 
-        // プレーンテキストログから traceID を正規表現で抽出
+        // ② プレーンテキストログからの抽出（regex）
+        // 結果は _tid_c / _sid_c / _lvl_d に格納し、JSON 抽出結果と coalesce でマージ
         stage.regex {
-          expression = "(?i)(?:traceid|trace_id)[=:\\s]+(?P<traceID>[a-f0-9]{16,32})"
+          expression = "(?i)(?:traceid|trace_id)[=:\\s]+(?P<_tid_c>[a-f0-9]{16,32})"
+        }
+        stage.regex {
+          expression = "(?i)(?:spanid|span_id)[=:\\s]+(?P<_sid_c>[a-f0-9]{16})"
+        }
+        stage.regex {
+          expression = "(?i)(?:^|\\s)level[=:\\s]+(?P<_lvl_d>trace|debug|info|warn(?:ing)?|error|fatal|panic|critical)"
         }
 
-        // 抽出した traceID を Loki ストリームラベルに昇格
-        // （抽出できなかった場合は空値のためラベルは付与されない）
+        // ③ 候補をマージして最終値を決定
+        // ラベル名は Grafana の derived fields 定義（traceID / spanID）と大文字小文字を一致させる
+        stage.template {
+          source   = "traceID"
+          template = `{{ "{{" }} coalesce (index . "_tid_a") (index . "_tid_b") (index . "_tid_c") | default "" {{ "}}" }}`
+        }
+        stage.template {
+          source   = "spanID"
+          template = `{{ "{{" }} coalesce (index . "_sid_a") (index . "_sid_b") (index . "_sid_c") | default "" {{ "}}" }}`
+        }
+        stage.template {
+          source   = "level"
+          template = `{{ "{{" }} coalesce (index . "_lvl_a") (index . "_lvl_b") (index . "_lvl_c") (index . "_lvl_d") | default "" | lower | replace "warning" "warn" {{ "}}" }}`
+        }
+
+        // ④ ラベルに昇格（値が空の場合はラベル付与されない）
         stage.labels {
           values = {
             traceID = "",
+            spanID  = "",
+            level   = "",
           }
         }
       }
 
+      // ── systemd journal ログ (kubelet / containerd) ──────────────
+      // __journal_* ラベルは forward_to 送信前に削除されるため、
+      // relabel_rules 引数で loki.relabel の .rules エクスポートを渡す必要がある。
+      // 参照: https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.journal/
+
+      // relabel ルール定義（forward_to は未使用、.rules エクスポートのみ利用）
+      loki.relabel "journal" {
+        forward_to = []
+
+        // kubelet と containerd のみ収集
+        rule {
+          source_labels = ["__journal__systemd_unit"]
+          regex         = "kubelet\\.service|containerd\\.service"
+          action        = "keep"
+        }
+        // job = "systemd/kubelet" or "systemd/containerd"
+        rule {
+          source_labels = ["__journal__systemd_unit"]
+          regex         = "(.+)\\.service"
+          target_label  = "job"
+          replacement   = "systemd/$1"
+        }
+        rule {
+          source_labels = ["__journal__systemd_unit"]
+          target_label  = "unit"
+        }
+        rule {
+          source_labels = ["__journal__hostname"]
+          target_label  = "node"
+        }
+        // PRIORITY_KEYWORD: debug / info / notice / warning / err / crit / alert / emerg
+        rule {
+          source_labels = ["__journal_priority_keyword"]
+          target_label  = "level"
+        }
+      }
+
+      loki.source.journal "system" {
+        path          = "/var/log/journal"
+        relabel_rules = loki.relabel.journal.rules
+        forward_to    = [loki.write.loki.receiver]
+      }
+
       // ── Loki への書き込み ─────────────────────────────────────
+      // batch_size を Loki 内部 gRPC 上限 (4MB) 未満に制限（journal 一括読み込み時の超過防止）
       loki.write "loki" {
         endpoint {
-          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+          url       = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+          batch_size = "2MiB"
         }
       }
 
@@ -130,6 +217,46 @@ alloy:
         http {
           endpoint = "0.0.0.0:4318"
         }
+        output {
+          traces = [otelcol.processor.filter.drop_otlp_self.input]
+        }
+      }
+
+      // ── Alloy 宛てスパンの除外 ───────────────────────────────
+      // istio-proxy はAlloyへのOTLP送信自体もSpanとして生成するため除外する。
+      // http.url にAlloyのFQDNを含むspanをまとめて除外する。
+      otelcol.processor.filter "drop_otlp_self" {
+        error_mode = "ignore"
+
+        traces {
+          span = [
+            `IsMatch(attributes["http.url"], ".*alloy\\.monitoring\\.svc\\.cluster\\.local.*")`,
+          ]
+        }
+
+        output {
+          traces = [otelcol.processor.transform.istio_normalize.input]
+        }
+      }
+
+      // ── Istio スパン正規化 ────────────────────────────────────
+      // Istio sidecar は service.name を "<canonical_service>.<namespace>" 形式で送り
+      // service.namespace を設定しない。
+      // istio.canonical_service / istio.namespace は span 属性として付与されるため
+      // context = "span" で span 属性を読み、resource 属性に書き込む。
+      otelcol.processor.transform "istio_normalize" {
+        error_mode = "ignore"
+
+        trace_statements {
+          context = "span"
+          statements = [
+            // istio.canonical_service があれば resource.service.name を上書き
+            `set(resource.attributes["service.name"], attributes["istio.canonical_service"]) where attributes["istio.canonical_service"] != nil`,
+            // istio.namespace を resource.service.namespace として設定
+            `set(resource.attributes["service.namespace"], attributes["istio.namespace"]) where attributes["istio.namespace"] != nil`,
+          ]
+        }
+
         output {
           traces = [otelcol.processor.batch.default.input]
         }
@@ -153,6 +280,11 @@ alloy:
         }
       }
 
+# Service: DaemonSet配置のため同一Node上のAlloyへのみルーティング
+# internalTrafficPolicy: Local により、クロスノードの不要なトラフィックを排除
+service:
+  internalTrafficPolicy: Local
+
 # DaemonSet として全Nodeに配置
 controller:
   type: daemonset
@@ -161,6 +293,19 @@ controller:
       operator: Exists
     - effect: NoExecute
       operator: Exists
+  volumes:
+    extra:
+      # systemd journal をホストからマウント
+      # DirectoryOrCreate: journal がまだ存在しない場合でも起動に失敗しない
+      - name: journal
+        hostPath:
+          path: /var/log/journal
+          type: DirectoryOrCreate
+      # ホストの machine-id をマウント（loki.source.journal のジャーナルディレクトリ検索に必要）
+      - name: machine-id
+        hostPath:
+          path: /etc/machine-id
+          type: File
 
 # ServiceMonitor 無効（VictoriaMetrics は VMServiceScrape を使用）
 serviceMonitor:

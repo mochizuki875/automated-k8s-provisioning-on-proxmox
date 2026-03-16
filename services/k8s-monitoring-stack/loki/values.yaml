@@ -1,7 +1,7 @@
 # =============================================================================
 # loki values.yaml
 # Grafana Loki - Monolithic (SingleBinary) モード設定
-# ファイルシステムストレージを使用し、proxmox-data StorageClass で永続化
+# ファイルシステムストレージを使用し、rook-ceph-block StorageClass で永続化
 # =============================================================================
 
 # Monolithic (SingleBinary) デプロイモードを指定
@@ -37,6 +37,14 @@ loki:
           prefix: loki_index_
           period: 24h
 
+  # ログ保存期間 (2日)
+  limits_config:
+    retention_period: 48h
+
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+
   # Ruler 設定 (ローカルルールファイル用)
   rulerConfig:
     wal:
@@ -53,7 +61,7 @@ singleBinary:
     enabled: true
     enableStatefulSetAutoDeletePVC: true
     size: 10Gi
-    storageClass: proxmox-data
+    storageClass: rook-ceph-block
     accessModes:
       - ReadWriteOnce
 

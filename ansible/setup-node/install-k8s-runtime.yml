@@ -21,6 +21,42 @@
         - update
 
     # ==========================================
+    # Time synchronization (chrony)
+    # ==========================================
+    - name: Stop and disable systemd-timesyncd
+      systemd:
+        name: systemd-timesyncd
+        enabled: no
+        state: stopped
+      tags:
+        - ntp
+
+    - name: Install chrony
+      apt:
+        name: chrony
+        state: present
+      tags:
+        - ntp
+
+    - name: Add NTP server to chrony.conf
+      lineinfile:
+        path: /etc/chrony/chrony.conf
+        line: "server\tntp.nict.jp\tiburst"
+        state: present
+      notify:
+        - Restart chrony
+      tags:
+        - ntp
+
+    - name: Enable and start chrony service
+      systemd:
+        name: chrony
+        enabled: yes
+        state: started
+      tags:
+        - ntp
+
+    # ==========================================
     # containerd installation
     # ==========================================
     - name: Download containerd
@@ -276,6 +312,11 @@
     - name: Restart containerd
       systemd:
         name: containerd
+        state: restarted
+
+    - name: Restart chrony
+      systemd:
+        name: chrony
         state: restarted
 
 - name: Configure control plane nodes

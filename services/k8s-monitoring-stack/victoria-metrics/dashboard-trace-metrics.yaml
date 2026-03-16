@@ -10,10 +10,10 @@ data:
     {
       "title": "Trace Metrics",
       "uid": "trace-metrics",
-      "description": "Tempo local_blocks (TraceQL metrics) によるトレースメトリクスのモニタリング。Data Source / Namespace / Service でフィルタリング可能。exemplar をクリックするとトレースへ遷移できます。",
+      "description": "Monitoring trace metrics via Tempo local_blocks (TraceQL metrics). Filterable by Data Source / Namespace / Service. Click an exemplar to navigate to the trace.",
       "schemaVersion": 38,
       "version": 3,
-      "refresh": "10s",
+      "refresh": "60s",
       "graphTooltip": 1,
       "time": {
         "from": "now-15m",
@@ -109,7 +109,7 @@ data:
         {
           "type": "row",
           "id": 1,
-          "title": "概要",
+          "title": "Overview",
           "gridPos": {
             "h": 1,
             "w": 24,
@@ -121,8 +121,8 @@ data:
         {
           "type": "stat",
           "id": 10,
-          "title": "リクエスト数 (期間内合計)",
-          "description": "選択期間内のスパン総数。",
+          "title": "Request Count (Total in Period)",
+          "description": "Total span count in the selected period.",
           "gridPos": {
             "h": 4,
             "w": 6,
@@ -176,8 +176,8 @@ data:
         {
           "type": "stat",
           "id": 11,
-          "title": "エラー数 (期間内合計)",
-          "description": "選択期間内のエラースパン総数。",
+          "title": "Error Count (Total in Period)",
+          "description": "Total error span count in the selected period.",
           "gridPos": {
             "h": 4,
             "w": 6,
@@ -239,8 +239,8 @@ data:
         {
           "type": "stat",
           "id": 12,
-          "title": "平均リクエストレート (期間内)",
-          "description": "選択期間内の平均 span/sec。時間窓全体のデータを平均して算出。",
+          "title": "Average Request Rate (in Period)",
+          "description": "Average span/sec in the selected period. Calculated by averaging data across the entire time window.",
           "gridPos": {
             "h": 4,
             "w": 6,
@@ -295,8 +295,8 @@ data:
         {
           "type": "stat",
           "id": 13,
-          "title": "p99 レイテンシ (期間平均)",
-          "description": "選択期間内の p99 レイテンシ平均値。時間窓全体のデータを平均して算出。",
+          "title": "p99 Latency (Period Average)",
+          "description": "Average p99 latency in the selected period. Calculated by averaging data across the entire time window.",
           "gridPos": {
             "h": 4,
             "w": 6,
@@ -359,7 +359,7 @@ data:
         {
           "type": "row",
           "id": 2,
-          "title": "リクエスト / エラー",
+          "title": "Request / Error",
           "gridPos": {
             "h": 1,
             "w": 24,
@@ -372,8 +372,8 @@ data:
           "type": "timeseries",
           "interval": "10s",
           "id": 20,
-          "title": "リクエストレート (Requests / sec)",
-          "description": "サービス別スパンレート。exemplar をクリックするとそのトレースへ遷移できます。",
+          "title": "Request Rate (Requests / sec)",
+          "description": "Span rate by service. Click an exemplar to navigate to the trace.",
           "gridPos": {
             "h": 8,
             "w": 12,
@@ -430,8 +430,8 @@ data:
           "type": "timeseries",
           "interval": "10s",
           "id": 21,
-          "title": "エラーレート (Errors / sec)",
-          "description": "status = error のスパンレート。",
+          "title": "Error Rate (Errors / sec)",
+          "description": "Span rate for status = error.",
           "gridPos": {
             "h": 8,
             "w": 12,
@@ -491,7 +491,7 @@ data:
         {
           "type": "row",
           "id": 3,
-          "title": "エラー詳細",
+          "title": "Error Details",
           "gridPos": {
             "h": 1,
             "w": 24,
@@ -504,8 +504,8 @@ data:
           "type": "timeseries",
           "interval": "10s",
           "id": 30,
-          "title": "エラー数 (Error Count)",
-          "description": "単位時間あたりのエラースパン数。",
+          "title": "Error Count",
+          "description": "Number of error spans per unit time.",
           "gridPos": {
             "h": 8,
             "w": 12,
@@ -566,8 +566,8 @@ data:
           "type": "timeseries",
           "interval": "10s",
           "id": 31,
-          "title": "スパン種別別リクエストレート (Span Kind)",
-          "description": "SERVER / CLIENT / PRODUCER / CONSUMER ごとのスパンレート。",
+          "title": "Request Rate by Span Kind",
+          "description": "Span rate per SERVER / CLIENT / PRODUCER / CONSUMER.",
           "gridPos": {
             "h": 8,
             "w": 12,
@@ -613,8 +613,8 @@ data:
                 "uid": "${datasource}"
               },
               "queryType": "traceql",
-              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | rate() by (span.kind)",
-              "legendFormat": "{{span.kind}}",
+              "query": "{resource.service.namespace=~\"$namespace\" && resource.service.name=~\"$service\"} | rate() by (kind)",
+              "legendFormat": "{{kind}}",
               "instant": false,
               "exemplars": 100
             }
@@ -623,7 +623,7 @@ data:
         {
           "type": "row",
           "id": 4,
-          "title": "レイテンシ (Latency)",
+          "title": "Latency",
           "gridPos": {
             "h": 1,
             "w": 24,
@@ -636,8 +636,8 @@ data:
           "type": "timeseries",
           "interval": "10s",
           "id": 40,
-          "title": "レイテンシ p99 / p95 / p50 (サービス別)",
-          "description": "TraceQL の quantile_over_time によるレイテンシパーセンタイル。exemplar をクリックすると低速トレースへ遷移できます。",
+          "title": "Latency p99 / p95 / p50 (by Service)",
+          "description": "Latency percentiles via TraceQL quantile_over_time. Click an exemplar to navigate to slow traces.",
           "gridPos": {
             "h": 8,
             "w": 24,
@@ -717,7 +717,7 @@ data:
         {
           "type": "row",
           "id": 5,
-          "title": "スパン遅延分布 / HTTP ステータス",
+          "title": "Span Delay Distribution / HTTP Status",
           "gridPos": {
             "h": 1,
             "w": 24,
@@ -730,8 +730,8 @@ data:
           "type": "timeseries",
           "interval": "10s",
           "id": 50,
-          "title": "HTTP メソッド別リクエストレート",
-          "description": "GET / POST など HTTP メソッド別のスパンレート。",
+          "title": "Request Rate by HTTP Method",
+          "description": "Span rate by HTTP method (GET / POST, etc.).",
           "gridPos": {
             "h": 8,
             "w": 12,
@@ -788,8 +788,8 @@ data:
           "type": "timeseries",
           "interval": "10s",
           "id": 51,
-          "title": "HTTP ステータス別リクエストレート",
-          "description": "HTTP ステータスコード別のスパンレート。",
+          "title": "Request Rate by HTTP Status",
+          "description": "Span rate by HTTP status code.",
           "gridPos": {
             "h": 8,
             "w": 12,

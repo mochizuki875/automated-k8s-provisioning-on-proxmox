@@ -41,13 +41,27 @@ vmsingle:
   spec:
     retentionPeriod: "1"
     replicaCount: 1
+    # VMSingle 削除時に PVC も自動削除する
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete
+      whenScaled: Delete
     storage:
       accessModes:
         - ReadWriteOnce
       resources:
         requests:
           storage: 20Gi
-      storageClassName: proxmox-data
+      storageClassName: rook-ceph-block
+    # ---------------------------------------------------------------------------
+    # メモリ逼迫対策: BestEffort → Burstable QoS に変更
+    # ---------------------------------------------------------------------------
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+      requests:
+        cpu: 250m
+        memory: 768Mi  # 実測 ~535Mi に対して余裕を持った値に修正
 
 # ---------------------------------------------------------------------------
 # Grafana Datasource 設定
@@ -70,10 +84,10 @@ defaultDatasources:
           exemplarTraceIdDestinations:
             - name: traceID
               datasourceUid: tempo
-              urlDisplayLabel: "Tempo でトレースを表示"
+              urlDisplayLabel: "Tempo Trace"
             - name: trace_id
               datasourceUid: tempo
-              urlDisplayLabel: "Tempo でトレースを表示"
+              urlDisplayLabel: "Tempo Trace"
       - name: VictoriaMetrics (DS)
         isDefault: false
         access: proxy
@@ -94,18 +108,23 @@ defaultDatasources:
       jsonData:
         # ログ内のトレース ID を検出して Tempo へのリンクを生成する
         derivedFields:
-          - name: TraceID
-            # 一般的なトレース ID のパターン (32文字 16進数)
-            matcherRegex: "(?:traceID|trace_id|traceId)[=: ]+([a-fA-F0-9]{32})"
-            url: "${__value.raw}"
+          - name: traceID
+            # プレーンテキスト: traceID=abc...  / JSON: "traceID": "abc..."
+            # [=": ]+ で = / ": " の両形式に対応
+            matcherRegex: "(?:traceID|trace_id|traceId)[=\": ]+([a-fA-F0-9]{32})"
+            # Grafana provisioning は ${VAR} を環境変数展開するため $$ でエスケープが必要
+            # $${__value.raw} → provisioning が $$ を $ に変換 → ${__value.raw} として保存
+            url: "$${__value.raw}"
+            internalLink: true
             datasourceUid: tempo
-            urlDisplayLabel: "Tempo でトレースを表示"
-          - name: TraceID_short
-            # 16文字の短いトレース ID にも対応
-            matcherRegex: "(?:traceID|trace_id|traceId)[=: ]+([a-fA-F0-9]{16})"
-            url: "${__value.raw}"
+            urlDisplayLabel: "Tempo Trace"
+          - name: spanID
+            # プレーンテキスト: spanID=abc...   / JSON: "spanID": "abc..."
+            matcherRegex: "(?:spanID|span_id|spanId)[=\": ]+([a-fA-F0-9]{16})"
+            url: "$${__value.raw}"
+            internalLink: true
             datasourceUid: tempo
-            urlDisplayLabel: "Tempo でトレースを表示"
+            urlDisplayLabel: "Tempo Span"
 
     # -------------------------------------------------------------------------
     # Tempo Datasource
@@ -124,10 +143,18 @@ defaultDatasources:
           spanStartTimeShift: "-1m"
           spanEndTimeShift: "1m"
           filterByTraceID: true
-          filterBySpanID: true
+          filterBySpanID: false
           tags:
+            # service.name (OTel) → service_name (Loki ラベル)
+            # happy-shopping の Pod は app.kubernetes.io/name を持たず app ラベルが付かないため
+            # Loki が自動付与する service_name を使用する
             - key: service.name
-              value: app
+              value: service_name
+            # service.namespace (OTel) → namespace (Loki ラベル)
+            - key: service.namespace
+              value: namespace
+            # k8s.pod.name (OTel) → pod (Loki ラベル)
+            # Pod 単位でログを絞り込むことで複数レプリカ混在時も正確に対応ログを特定できる
             - key: k8s.pod.name
               value: pod
         # トレースから VictoriaMetrics メトリクスへのリンク
@@ -180,7 +207,7 @@ grafana:
   # Grafana データ永続化
   persistence:
     enabled: true
-    storageClassName: proxmox-data
+    storageClassName: rook-ceph-block
     size: 5Gi
 
   # サイドカー設定 (ConfigMap 経由で Datasource/Dashboard を自動検出)

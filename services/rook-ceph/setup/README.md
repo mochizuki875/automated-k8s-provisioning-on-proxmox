@@ -14,3 +14,7 @@ Cephクラスタを作成
 ```bash
 kubectl apply -f cluste.yaml
 ```
+
+## ダッシュボード
+ID:root
+PW: password

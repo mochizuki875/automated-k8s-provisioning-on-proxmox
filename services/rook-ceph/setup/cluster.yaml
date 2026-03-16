@@ -233,28 +233,40 @@ spec:
   # These labels can be passed as LabelSelector to Prometheus
   #   monitoring:
   #   crashcollector:
+  # ---------------------------------------------------------------------------
+  # cephConfig: Ceph デーモン内部設定
+  # osd_memory_target: BlueStore キャッシュ上限 (デフォルト 4Gi → 2Gi に制限)
+  # ---------------------------------------------------------------------------
+  cephConfig:
+    osd:
+      osd_memory_target: "2147483648"  # 2Gi in bytes
+
   resources:
-  #The requests and limits set here, allow the mgr pod to use half of one CPU core and 1 gigabyte of memory
-  #   mgr:
-  #     limits:
-  #       memory: "1024Mi"
-  #     requests:
-  #       cpu: "500m"
-  #       memory: "1024Mi"
-  # The above example requests/limits can also be added to the other components
-  #   mon:
-  #   osd:
-  # For OSD it also is a possible to specify requests/limits based on device class
-  #   osd-hdd:
-  #   osd-ssd:
-  #   osd-nvme:
-  #   prepareosd:
-  #   mgr-sidecar:
-  #   crashcollector:
-  #   logcollector:
-  #   cleanup:
-  #   exporter:
-  #   cmd-reporter:
+    # OSD: osd_memory_target(2Gi) + オーバーヘッド分で 2.5Gi に設定
+    # CPU limits: 通常は低いがスクラブ/リカバリ時にスパイクするため 2 コアを上限
+    osd:
+      limits:
+        cpu: "2000m"
+        memory: "2560Mi"
+      requests:
+        cpu: "500m"
+        memory: "2Gi"
+    # mgr: ダッシュボード/API キャッシュ上限
+    mgr:
+      limits:
+        cpu: "1000m"
+        memory: "1Gi"
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+    # mon: RocksDB / Paxos 処理
+    mon:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
   # The option to automatically remove OSDs that are out and are safe to destroy.
   removeOSDsIfOutAndSafeToRemove: false
   priorityClassNames:

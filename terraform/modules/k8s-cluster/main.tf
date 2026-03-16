@@ -107,6 +107,9 @@ resource "proxmox_vm_qemu" "k8s_vms" {
   lifecycle {
     ignore_changes = [
       network,
+      # マイグレーション後にStateとHCLの差異でForceNewが発生するのを防ぐ
+      clone,
+      full_clone,
     ]
   }
 }

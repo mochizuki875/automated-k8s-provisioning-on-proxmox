@@ -40,8 +40,8 @@ inputs = {
   node_spec = {
     cores      = 8
     sockets    = 1
-    # memory     = 32768
-    memory    = 16384
+    memory     = 32768
+    # memory    = 16384
     disk1_size = "100G"
     disk2_size = "100G"
   }
@@ -66,14 +66,14 @@ inputs = {
     },
     {
       name        = "k8s-cluster1-node02"
-      target_node = "pve01"
+      target_node = "pve03"
       vm_id       = 103
       ip_address  = "192.168.2.122"
       role        = "Node"
     },
     {
       name        = "k8s-cluster1-node03"
-      target_node = "pve01"
+      target_node = "pve03"
       vm_id       = 104
       ip_address  = "192.168.2.123"
       role        = "Node"

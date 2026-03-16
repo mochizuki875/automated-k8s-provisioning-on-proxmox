@@ -4,7 +4,7 @@ Kubernetesクラスタを構成するVMに必要なコンテナランタイム(c
 ## ファイル構造
 
 ```
-install-kubeadm/
+setup-node/
 ├── clusters/                 # クラスタ毎の設定ディレクトリ
 │   └── cluster1/             # cluster1の設定
 │       ├── inventory.ini     # ホスト情報と認証設定

@@ -64,14 +64,12 @@ tempo:
           - http.method
           - http.status_code
       local_blocks:
-        # Grafana Traces Drilldown の TraceQL metrics に必要
-        # メモリ上にトレースブロックを保持して TraceQL クエリを処理する
         flush_check_period: 10s
-        trace_idle_period: 10s
-        max_block_duration: 24h
-        max_block_bytes: 524288000  # 500 MiB
+        trace_idle_period: 30s        # アイドルトレースを早めにフラッシュ
+        max_block_duration: 10m       # 旧: 6h → 10m に大幅短縮
+        max_block_bytes: 52428800     # 旧: 500MiB → 50MiB に大幅削減
         filter_server_spans: false
-        complete_block_timeout: 24h  # 1h → 24h: 完了ブロックを 24h 保持し exemplar を長期間返せるようにする
+        complete_block_timeout: 15m   # 旧: 6h → 15m に大幅短縮
     storage:
       # Metrics Generator のメトリクスブロック保存パス (PVC マウント先 /var/tempo 配下)
       path: "/var/tempo/metrics"
@@ -98,8 +96,31 @@ tempo:
   server:
     http_listen_port: 3200
 
+  # GC ballast: 1024MiB(デフォルト) → 256MiB に削減
+  # GCを頻繁に動作させてメモリ使用量ピークを抑える
+  memBallastSizeMbs: 256
+
   # トレースデータ保持期間
   retention: 24h
+
+  # ---------------------------------------------------------------------------
+  # Compactor 設定
+  # max_block_bytes: 1 ブロックあたりの上限サイズ (コンパクション時の一時メモリ消費抑制)
+  # ---------------------------------------------------------------------------
+  compactor:
+    compaction:
+      max_block_bytes: 524288000  # 500MiB: コンパクション後ブロック上限
+
+  # ---------------------------------------------------------------------------
+  # リソース制限設定
+  # メモリ逼迫対策: BestEffort → Burstable QoS に変更
+  # ---------------------------------------------------------------------------
+  resources:
+    limits:
+      memory: 8Gi
+    requests:
+      memory: 2Gi
+      cpu: 500m
 
 # ---------------------------------------------------------------------------
 # データ永続化設定
@@ -110,7 +131,7 @@ persistence:
   accessModes:
     - ReadWriteOnce
   size: 10Gi
-  storageClassName: proxmox-data
+  storageClassName: rook-ceph-block
 
 # ---------------------------------------------------------------------------
 # ServiceMonitor 設定

@@ -1,0 +1,11 @@
+repositories:
+- name: kubescape
+  url: https://kubescape.github.io/helm-charts/
+
+releases:
+  - name: kubescape
+    namespace: kubescape
+    createNamespace: true
+    chart: kubescape/kubescape-operator
+    values:
+      - values.yaml

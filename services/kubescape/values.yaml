@@ -1,0 +1,54 @@
+# クラスター名 (kubectl config current-context の値に合わせて変更してください)
+clusterName: "my-cluster"
+
+capabilities:
+  # ====== コンプライアンススキャン関連 ======
+  # デフォルトのコンフィグレーションスキャン
+  configurationScan: enable
+  # 継続的スキャン: クラスターのセキュリティポスチャを継続的に評価する
+  continuousScan: enable
+  nodeScan: enable
+
+  # ====== イメージ脆弱性スキャン関連 ======
+  vulnerabilityScan: enable
+  relevancy: enable
+  # VEXドキュメント生成 (実験的)
+  vexGeneration: disable
+
+  # ====== ランタイム関連 ======
+  runtimeObservability: enable
+  networkPolicyService: disable  # NetworkPolicy を自動生成・適用するため無効化
+  runtimeDetection: disable
+  malwareDetection: disable
+  nodeProfileService: disable
+  seccompProfileService: disable  # SeccompProfile を自動生成・管理するため無効化
+
+  # ====== その他 ======
+  autoUpgrading: disable
+  prometheusExporter: disable
+
+# サービスディスカバリー設定
+serviceScanConfig:
+  enabled: false
+  interval: 1h
+
+# ストレージ設定
+# rook-ceph-block は reclaimPolicy: Delete のため、helm uninstall 時に PV も削除される
+persistence:
+  storageClass: "rook-ceph-block"
+  accessMode: ReadWriteOnce
+  size:
+    backingStorage: 5Gi
+    kubevuln: 5Gi
+
+# コンプライアンススキャンのスケジュール (デフォルト: 毎日 08:00)
+kubescapeScheduler:
+  scanSchedule: "0 8 * * *"
+
+# 脆弱性スキャンのスケジュール (デフォルト: 毎日 00:00)
+kubevulnScheduler:
+  scanSchedule: "0 0 * * *"
+
+# レジストリスキャンのスケジュール (デフォルト: 毎日 00:00)
+registryScanScheduler:
+  scanSchedule: "0 0 * * *"
