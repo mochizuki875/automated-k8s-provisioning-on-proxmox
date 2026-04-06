@@ -1,0 +1,305 @@
+# =============================================================================
+# grafana-alerts.yaml
+# Grafana Alerting provisioning - Alert rule definitions
+#
+# The Grafana sidecar auto-detects ConfigMaps labeled grafana_alert: "1".
+# To add/modify rules, edit this file and run: kubectl apply -f grafana-alerts.yaml
+# No helmfile apply or Grafana Pod restart required.
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-alert-rules
+  namespace: monitoring
+  labels:
+    grafana_alert: "1"    # label detected by sidecar.alerts
+data:
+  rules.yaml: |-
+    apiVersion: 1
+    groups:
+
+        # ─────────────────────────────────────────────────────────
+        # datasourceUid references (must match values.yaml defaultDatasources.extra[].uid)
+        #   loki   -> Loki datasource
+        #   '-100' -> Grafana built-in expression engine (__expr__)
+        # ---------------------------------------------------------
+        # Group 1: Application log alerts
+        #   Source: 'level' label extracted by Alloy's loki.process pipeline
+        #   Evaluation interval: 1m
+        # ---------------------------------------------------------
+        - orgId: 1
+          name: app-log-alerts
+          folder: Alerts
+          interval: 1m
+          rules:
+
+            # -- Rule 1: ERROR log detection in application namespaces ---------
+            # Fires when ERROR/FATAL/PANIC logs appear in app namespaces
+            # within a 5-minute window. Sustained for 1m before alerting.
+            - uid: loki-app-error-level
+              title: "App ERROR Log Detected"
+              condition: threshold
+              data:
+                # Query: Count error-level log entries per namespace/app over 5m
+                - refId: count
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: loki
+                  model:
+                    datasource:
+                      type: loki
+                      uid: loki
+                    editorMode: code
+                    # 'level' label is extracted by Alloy loki.process stage
+                    # '| json error, msg' extracts the 'error' and 'msg' fields from JSON logs.
+                    # '| label_format err=error' renames 'error' to 'err'
+                    # (unquoted src = rename; quoted src = literal string template)
+                    # Non-JSON logs or logs without these fields are grouped with err="", msg="".
+                    expr: >-
+                      sum by (namespace, pod, service_name, err, msg) (
+                        count_over_time(
+                          {namespace!~"monitoring|kube-system|kube-public|cert-manager|csi-proxmox|rook-ceph|kubescape|istio-system|gpu-operator|kagent",
+                           level=~"error|fatal|panic|critical"}
+                          | json error, msg
+                          | label_format err=error
+                          [5m]
+                        )
+                      )
+                    hide: false
+                    queryType: range
+                    refId: count
+                # Reduce: per-series sum (preserves namespace/app labels)
+                - refId: sum
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: '-100'
+                  model:
+                    datasource:
+                      type: __expr__
+                      uid: '-100'
+                    expression: count
+                    hide: false
+                    reducer: sum
+                    refId: sum
+                    type: reduce
+                # Threshold: fire if sum > 0
+                - refId: threshold
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: '-100'
+                  model:
+                    conditions:
+                      - evaluator:
+                          params:
+                            - 0
+                          type: gt
+                        operator:
+                          type: and
+                        query:
+                          params:
+                            - threshold
+                        reducer:
+                          params: []
+                          type: last
+                        type: query
+                    datasource:
+                      type: __expr__
+                      uid: '-100'
+                    expression: sum
+                    hide: false
+                    refId: threshold
+                    type: threshold
+              noDataState: OK
+              execErrState: Error
+              for: 0s
+              keep_firing_for: 5m
+              annotations:
+                summary: >-
+                  ERROR log detected in {{ $labels.namespace }}/{{ $labels.pod }}
+                  {{- if $labels.err }}: {{ $labels.err }}{{ end }}
+                description: >-
+                  ERROR/FATAL/PANIC log entries were detected.
+                  Namespace: {{ $labels.namespace }},
+                  Pod: {{ $labels.pod }},
+                  Service: {{ $labels.service_name }}.
+                  Message: {{ if $labels.msg }}{{ $labels.msg }}{{ else }}(no msg field){{ end }}
+                  Error: {{ if $labels.err }}{{ $labels.err }}{{ else }}(no error field; check Loki Explore for details){{ end }}
+                runbook_url: ""
+              labels:
+                severity: error
+              isPaused: false
+
+            # -- Rule 2: FATAL / PANIC log immediate detection ----------------
+            # Fires immediately (for: 0s) on fatal/panic/critical logs.
+            # Broader namespace scope than Rule 1 to catch system-level failures.
+            - uid: loki-fatal-panic-any
+              title: "FATAL / PANIC Log Detected"
+              condition: threshold
+              data:
+                - refId: count
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: loki
+                  model:
+                    datasource:
+                      type: loki
+                      uid: loki
+                    editorMode: code
+                    expr: >-
+                      sum by (namespace, pod, service_name, err, msg) (
+                        count_over_time(
+                          {namespace!~"monitoring|kube-public",
+                           level=~"fatal|panic|critical"}
+                          | json error, msg
+                          | label_format err=error
+                          [5m]
+                        )
+                      )
+                    hide: false
+                    queryType: range
+                    refId: count
+                - refId: sum
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: '-100'
+                  model:
+                    datasource:
+                      type: __expr__
+                      uid: '-100'
+                    expression: count
+                    hide: false
+                    reducer: sum
+                    refId: sum
+                    type: reduce
+                - refId: threshold
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: '-100'
+                  model:
+                    conditions:
+                      - evaluator:
+                          params:
+                            - 0
+                          type: gt
+                        operator:
+                          type: and
+                        query:
+                          params:
+                            - threshold
+                        reducer:
+                          params: []
+                          type: last
+                        type: query
+                    datasource:
+                      type: __expr__
+                      uid: '-100'
+                    expression: sum
+                    hide: false
+                    refId: threshold
+                    type: threshold
+              noDataState: OK
+              execErrState: Error
+              for: 0s
+              keep_firing_for: 5m
+              annotations:
+                summary: >-
+                  FATAL/PANIC log detected in {{ $labels.namespace }}/{{ $labels.pod }}
+                  {{- if $labels.err }}: {{ $labels.err }}{{ end }}
+                description: >-
+                  A critical failure was detected. Immediate investigation required.
+                  Namespace: {{ $labels.namespace }},
+                  Pod: {{ $labels.pod }},
+                  Service: {{ $labels.service_name }}.                  Message: {{ if $labels.msg }}{{ $labels.msg }}{{ else }}(no msg field){{ end }}                  Error: {{ if $labels.err }}{{ $labels.err }}{{ else }}(err field not present in log; check Loki Explore for details){{ end }}
+                runbook_url: ""
+              labels:
+                severity: critical
+              isPaused: false
+
+            # -- Rule 3: kubelet / containerd error log detection -------------
+            # Detects err/crit/emerg level logs from systemd journal
+            # (kubelet, containerd) collected via Alloy loki.source.journal.
+            - uid: loki-systemd-error
+              title: "kubelet / containerd Error Log Detected"
+              condition: threshold
+              data:
+                - refId: count
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: loki
+                  model:
+                    datasource:
+                      type: loki
+                      uid: loki
+                    editorMode: code
+                    # job label: systemd/kubelet or systemd/containerd
+                    expr: >-
+                      sum by (node, unit) (
+                        count_over_time(
+                          {job=~"systemd/.*", level=~"err|crit|alert|emerg"}
+                          [5m]
+                        )
+                      )
+                    hide: false
+                    queryType: range
+                    refId: count
+                - refId: sum
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: '-100'
+                  model:
+                    datasource:
+                      type: __expr__
+                      uid: '-100'
+                    expression: count
+                    hide: false
+                    reducer: sum
+                    refId: sum
+                    type: reduce
+                - refId: threshold
+                  relativeTimeRange:
+                    from: 300
+                    to: 0
+                  datasourceUid: '-100'
+                  model:
+                    conditions:
+                      - evaluator:
+                          params:
+                            - 0
+                          type: gt
+                        operator:
+                          type: and
+                        query:
+                          params:
+                            - threshold
+                        reducer:
+                          params: []
+                          type: last
+                        type: query
+                    datasource:
+                      type: __expr__
+                      uid: '-100'
+                    expression: sum
+                    hide: false
+                    refId: threshold
+                    type: threshold
+              noDataState: OK
+              execErrState: Error
+              for: 2m
+              keep_firing_for: 5m
+              annotations:
+                summary: "Error log detected: {{ $labels.unit }} on node {{ $labels.node }}"
+                description: >-
+                  err/crit/emerg level log entries were detected from {{ $labels.unit }}
+                  on node {{ $labels.node }} within the last 5 minutes.
+                runbook_url: ""
+              labels:
+                severity: error
+              isPaused: false
