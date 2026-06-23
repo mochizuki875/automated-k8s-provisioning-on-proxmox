@@ -1,0 +1,13 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMStaticScrape
+metadata:
+  name: edgexpert01-vllm-vmstaticscrape
+  namespace: monitoring
+spec:
+  jobName: vllm
+  targetEndpoints:
+    - targets:
+        - 192.168.2.174:8000
+      scheme: http
+      path: /metrics
+      interval: 30s

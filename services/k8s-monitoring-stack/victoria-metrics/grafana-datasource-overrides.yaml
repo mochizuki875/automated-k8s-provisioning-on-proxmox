@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vmks-grafana-datasource-overrides
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/instance: vmks
+    app.kubernetes.io/name: grafana
+    grafana_datasource: "1"
+data:
+  datasource-overrides.yaml: |-
+    apiVersion: 1
+    datasources:
+      - name: Loki
+        type: loki
+        access: proxy
+        uid: loki
+        version: 2
+        editable: false
+        url: http://loki.monitoring.svc.cluster.local:3100
+        jsonData:
+          derivedFields:
+            - name: traceID
+              matcherRegex: "(?:traceID|trace_id|traceId)[=\": ]+([a-fA-F0-9]{32})"
+              url: "$${__value.raw}"
+              internalLink: true
+              datasourceUid: tempo
+              urlDisplayLabel: "Tempo Trace"
+            - name: spanID
+              matcherRegex: "(?:spanID|span_id|spanId)[=\": ]+([a-fA-F0-9]{16})"
+              url: "$${__value.raw}"
+              internalLink: true
+              datasourceUid: tempo
+              urlDisplayLabel: "Tempo Span"
+      - name: Tempo
+        type: tempo
+        access: proxy
+        uid: tempo
+        version: 2
+        editable: false
+        url: http://tempo.monitoring.svc.cluster.local:3200
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+            spanStartTimeShift: "-1m"
+            spanEndTimeShift: "1m"
+            filterByTraceID: true
+            filterBySpanID: false
+            tags:
+              - key: service.name
+                value: service_name
+              - key: service.namespace
+                value: namespace
+              - key: k8s.pod.name
+                value: pod
+          tracesToMetrics:
+            datasourceUid: victoriametrics
+            spanStartTimeShift: "-1m"
+            spanEndTimeShift: "1m"
+            tags:
+              - key: service.name
+                value: service
+            queries:
+              - name: "Request Rate"
+                query: 'sum(rate(traces_spanmetrics_calls_total{$__tags}[5m])) by (service)'
+              - name: "Error Rate"
+                query: 'sum(rate(traces_spanmetrics_calls_total{status_code="STATUS_CODE_ERROR",$__tags}[5m])) by (service)'
+              - name: "Latency p99"
+                query: 'histogram_quantile(0.99, sum(rate(traces_spanmetrics_latency_bucket{$__tags}[5m])) by (le, service))'
+          serviceMap:
+            datasourceUid: victoriametrics
+          nodeGraph:
+            enabled: true
+          lokiSearch:
+            datasourceUid: loki
+          search:
+            hide: false

@@ -17,7 +17,7 @@
 
 | Chart | App |
 |-------|-----|
-| 0.72.2 | v1.136.0 |
+| 0.84.0 | v1.145.0 |
 
 ## インストール
 
@@ -27,6 +27,9 @@ helmfile apply
 
 > リリース名は `vm` です（ネーミング63文字制限のため短縮）
 ```
+
+`helmfile.yaml` の `presync` hook で chart 同梱 CRD を毎回 `kubectl apply` します。
+VictoriaMetrics Operator は chart upgrade 時に CRD 追加を伴うことがあり、Helm upgrade 単体では既存 CRD が更新されないためです。
 
 ## Datasource 設定 (相関分析)
 
@@ -57,6 +60,8 @@ Grafana には以下の Datasource が自動的にプロビジョニングされ
    - Tempo datasource に `tracesToLogsV2` を設定
    - トレースから該当時間帯・サービスのログへジャンプ可能
 
+datasource の定義本体は [services/k8s-monitoring-stack/victoria-metrics/values.yaml](services/k8s-monitoring-stack/victoria-metrics/values.yaml) の `grafana.datasources` にあります。
+
 ## ストレージ設定
 
 | コンポーネント | StorageClass | サイズ |
@@ -76,6 +81,12 @@ kubectl port-forward -n monitoring svc/victoria-metrics-grafana 3000:80
 
 - ユーザー名: `admin`
 - パスワード: `admin-password` (**本番環境では必ず変更すること**)
+
+## Scrapeの追加
+`VMServiceScrape`や`VMStaticScrape`といったリソースを作成することでスクレイプ対象を追加できる。
+
+- [VMServiceScrape](https://docs.victoriametrics.com/operator/resources/vmservicescrape/)
+- [VMStaticScrape](https://docs.victoriametrics.com/operator/resources/vmstaticscrape/)
 
 ## 注意事項
 

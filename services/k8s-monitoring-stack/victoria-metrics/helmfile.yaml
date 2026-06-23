@@ -6,6 +6,15 @@ releases:
   - name: vmks
     namespace: monitoring
     chart: victoria-metrics/victoria-metrics-k8s-stack
-    version: "0.72.2"
+    version: "0.84.0"
     values:
       - values.yaml
+    hooks:
+      - events: ["presync"]
+        showlogs: true
+        command: "bash"
+        args:
+          - "-c"
+          - |
+            # Helm upgrade は既存 CRD を更新しないため、chart 同梱 CRD を先に反映する
+            helm show crds victoria-metrics/victoria-metrics-k8s-stack --version 0.84.0 | kubectl apply -f -

@@ -1,3 +1,19 @@
+vmagent:
+  # -- Create VMAgent CR
+  enabled: true
+  # -- (object) Full spec for VMAgent CRD. Allowed values described [here](https://docs.victoriametrics.com/operator/api/#vmagentspec)
+  spec:
+    port: "8429"
+    # 全てのServiceScrapes(e.g. VMServiceScrape)を自動検出してスクレイプする
+    #   https://docs.victoriametrics.com/operator/api/#vmagentspec-selectallbydefault
+    selectAllByDefault: true
+    scrapeInterval: 30s
+    externalLabels: {}
+      # For multi-cluster setups it is useful to use "cluster" label to identify the metrics source.
+      # For example:
+      # cluster: cluster-name
+    extraArgs:
+      promscrape.streamParse: "true"
 # =============================================================================
 # victoria-metrics-k8s-stack values.yaml
 # Grafana と VictoriaMetrics (Single Server) のスタック設定
